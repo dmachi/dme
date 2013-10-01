@@ -1,0 +1,23 @@
+{
+  "name": "dme",
+  "description": "Data Model Engine for Express",
+  "version": "0.1.0",
+  "author": {
+    "name": "Dustin Machi",
+    "email": "dmachi@dojotoolkit.org"
+  },
+  "keywords": [
+    "data model",
+    "engine",
+    "express"
+  ],
+  "devDependencies": {
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/dmachi/dme.git"
+  },
+ "bugs": {
+    "url": "https://github.com/dmachi/dme/issues"
+  }
+}
