@@ -4,6 +4,8 @@ var util = require("util");
 var defer = require("promised-io/promise").defer;
 var when = require("promised-io/promise").when;
 var LazyArray = require("promised-io/lazy-array").LazyArray;
+var randomstring = require("randomstring");
+var parser = require("rql/parser");
 
 var Store = exports.Store= function(id,opts){
 	this.opts=opts||{};
@@ -48,15 +50,15 @@ Store.prototype.get = function(id, options){
 	var def = new defer();
 	var cursor = this.collection.find({id: id}).limit(1).toArray(function(err,docs){
 		var obj = docs[0];
-		if (err) { def.reject(err);return; }
-		if (obj._id) { delete obj._id; }
+		if (err) { console.log("MONGO DB GET ERROR: ", err); def.reject(err);return; }
+		if (obj && obj._id) { delete obj._id; }
 		def.resolve(obj);	
 	});
 	return def.promise;
 }
 
 Store.prototype.parseQuery=function(query, opts) {
-	console.log("parseQuery: ", query);
+	//console.log("parseQuery: ", query);
 	var options = {
 		skip: 0,
 		limit: +Infinity,
@@ -64,6 +66,14 @@ Store.prototype.parseQuery=function(query, opts) {
 		lastLimit: +Infinity
 	};
 	var search = {};
+
+	if (typeof query == "string"){
+		if (query.charAt(0)=="?"){
+			query = query.substr(1);
+		}
+		query = parser.parse(query);	
+	}
+
 	
 	function walk(name, terms) {
 		// valid funcs
@@ -86,6 +96,7 @@ Store.prototype.parseQuery=function(query, opts) {
 			// process well-known functions
 			// http://www.mongodb.org/display/DOCS/Querying
 			if (func == 'sort' && args.length > 0) {
+				//console.log("SORT", func, args);
 				options.sort = args.map(function(sortAttribute){
 					var firstChar = sortAttribute.charAt(0);
 					var orderDir = 'ascending';
@@ -183,13 +194,14 @@ Store.prototype.parseQuery=function(query, opts) {
 	}
 	//dir(['Q:',query]);
 	search = walk(query.name, query.args);
-	//dir(['S:',search]);
 	return [options, search];
 }
 Store.prototype.query= function(query, opts){
+
 	var _self=this;
-	console.log("query: ", query);
+	//console.log("query: ", query);
 	var x = this.parseQuery(query);
+	//console.log("x: ", x);
 	/*
 	var def = new defer();
 	var cursor = this.collection.find(query||{});
@@ -223,25 +235,30 @@ Store.prototype.query= function(query, opts){
 		return results;
 	}
 
+	//console.log("Meta: ", meta);
+	//console.log("Search: ", search);
 	// request full recordset length
 //dir('RANGE', options, directives.limit);
 	// N.B. due to collection.count doesn't respect meta.skip and meta.limit
 	// we have to correct returned totalCount manually.
 	// totalCount will be the minimum of unlimited query length and the limit itself
-	var totalCountPromise = (meta.totalCount) ?
-		when(callAsync(collection.count, [search]), function(totalCount){
-			totalCount -= meta.lastSkip;
-			if (totalCount < 0)
-				totalCount = 0;
-			if (meta.lastLimit < totalCount)
-				totalCount = meta.lastLimit;
-			// N.B. just like in rql/js-array
-			return Math.min(totalCount, typeof meta.totalCount === "number" ? meta.totalCount : Infinity);
-		}) : undefined;
+	var totalCountPromise = new defer();
+
+	this.collection.count(search, function(err,totalCount){
+		//console.log("totalCount: ", totalCount);
+		totalCount -= meta.lastSkip;
+		if (totalCount < 0)
+			totalCount = 0;
+		if (meta.lastLimit < totalCount)
+			totalCount = meta.lastLimit;
+		// N.B. just like in rql/js-array
+		totalCountPromise.resolve(Math.min(totalCount, typeof meta.totalCount === "number" ? meta.totalCount : Infinity));
+	})
 //}
 
 		// request filtered recordset
-//dir('QRY:', search);
+//console.log('QRY:', search, typeof search);
+	
 	this.collection.find(search, meta, function(err, cursor){
 		if (err) return deferred.reject(err);
 		cursor.toArray(function(err, results){
@@ -266,6 +283,7 @@ Store.prototype.query= function(query, opts){
 			}
 			// total count
 			when(totalCountPromise, function(result){
+				//console.log("when totalCountPromise: ", results, result);
 				results.count = results.length;
 				results.start = meta.skip;
 				results.end = meta.skip + results.count;
@@ -280,23 +298,138 @@ Store.prototype.query= function(query, opts){
 }
 
 Store.prototype.post = function(obj, options){
-	console.log("Store POST: ", obj);
-	var def = new defer();
+	var _self=this;
 //	this.db.collection(this.id).update({id: obj.id || options.id},{$set: obj},{multi:false,upsert:true}, function(err){
-	this.collection.save(obj, {safe: true}, function(err){
-		if (err) {def.reject(err); return;}
-		def.resolve(true);	
-	});	
-	return def.promise;
+
+
+	console.log("MONGO STORE post()", obj);
+	if (!obj.id) {
+		obj.id = (options&&options.id)?options.id:randomstring.generate(10); 
+		return this.put(obj, options);
+	}
+
+
+	var upd = {};
+	for (prop in obj){
+		if (prop=="id"){continue;}
+		var s = this.schema.properties[prop];
+		if (!s && this.schema.allowAdditionalProperties){
+			upd[prop]=obj[prop];
+		}else{
+			switch(s.type){
+				case "date":
+
+					if(obj[prop]!==undefined){ 
+						if (obj[prop] instanceof Date){
+							upd[prop] = obj[prop];
+						}else if (typeof obj[prop] == "string"){
+							upd[prop] = new Date(Date.parse(obj[prop]));
+						}else if (typeof obj[prop]=="number"){
+							upd[prop] = new Date(obj[prop]);
+						}
+					}
+					break;
+				case "array":
+					if((obj[prop]!==undefined) && !obj[prop].forEach) { // !(obj[prop] instanceof Array)){
+						throw Error("Invalid Type in property: ", prop," Should be: ", s.type, " but found ", typeof obj[prop]);
+					}
+					upd[prop]=obj[prop];
+					break;
+				default:
+					if ((obj[prop]!==undefined) && (typeof obj[prop] != s.type)){
+						throw Error("Invalid Type in property: ", prop," Should be: ", s.type, " but found ", typeof obj[prop]);
+					}
+					upd[prop]=obj[prop];
+			}
+//			upd[prop]=obj[prop];
+		}
+	}
+	var def = new defer();	
+	if (obj._id) { delete obj._id; }
+	console.log("MONGO UPDATE: ", obj.id, upd);
+	this.collection.findAndModify({id: obj.id},[],{$set:upd},{multi:false,safe:true}, function(err, resp){
+		console.log("findAndModify Results: ", arguments);		
+		if (err){
+			console.log("MONGO UPDATE ERROR: ", err);
+			def.reject(err);
+		}
+		_self.get(obj.id).then(function(o){
+			def.resolve(o);
+		});
+	});
+	return def.promise;	
 };
 
+Store.prototype.normalizeObject= function(obj){
+	console.log("Normalize Obj: ", obj);
+	if (obj._id) { delete obj._id; }
+	var _self=this;
+	var schema = this.schema;
+	Object.keys(schema.properties).forEach(function(prop){
+		var s = schema.properties[prop];
+		//console.log(prop, "s: ",s.type, s);
+		//console.log(prop, ": ", typeof obj[prop], typeof s.default);
+		if (s.required){
+			if ((typeof obj[prop]=='undefined') && (typeof s.default!='undefined')){
+				console.log("set to default: obj[prop]:",obj[prop], s['default']); 
+				obj[prop]=s['default'];
+			
+			}else if (obj[prop]===undefined){
+				throw Error("Missing required property: "+ prop);
+			}
+		}
+
+		
+		switch(s.type){
+			case "date":
+				console.log("Inspecting Date Value: ");
+				console.log(prop, "Date Obj Val: ", obj[prop], "String?:", typeof obj[prop]=="string", "instanceOf Date: ", obj[prop] instanceof Date);
+
+				if(obj[prop]!==undefined){ 
+					if (obj[prop] instanceof Date){
+						obj[prop] = obj[prop];//.toISOString();
+					}else if (typeof obj[prop] == "string"){
+						obj[prop] = new Date(Date.parse(obj[prop]));//.toISOString();
+					}else if (typeof obj[prop]=="number"){
+						obj[prop] = new Date(obj[prop]);//.toISOString();	
+					}
+				}
+				break;
+			case "array":
+				if((obj[prop]!==undefined) && (obj[prop] instanceof Array)){
+					obj[prop] = obj[prop];
+				}
+				break;
+			default:
+				if ((obj[prop]!==undefined) && (typeof obj[prop] != s.type)){
+					throw Error("Invalid Type in property: ", prop," Should be: ", s.type, " but found ", typeof obj[prop]);
+				}
+		}
+	});
+
+	for (prop in obj){
+		var op = obj[prop];
+		var sp = this.schema.properties[prop];
+
+		if ((!sp && !this.allowAdditionalProperties) || sp.transient){
+			delete obj[prop];	
+		}	
+	}
+
+	console.log("Normalized Obj : ", obj);
+	return obj;		
+}
 
 Store.prototype.put = function(obj, options){
 	var def = new defer();
 //	this.db.collection(this.id).update({id: obj.id || options.id},{$set: obj},{multi:false,upsert:true}, function(err){
-	this.collection.save(obj, {safe: true}, function(err){
+	var obj = this.normalizeObject(obj);
+
+	console.log("Collection.save()");
+	this.collection.save(obj, {safe: true}, function(err,obj){
+		console.log("Final Object: ", obj);
 		if (err) {def.reject(err); return;}
-		def.resolve(true);	
+		def.resolve(obj);	
 	});	
 	return def.promise;
 };

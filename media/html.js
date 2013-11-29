@@ -6,7 +6,7 @@ exports.Media = {
 		console.log("Serialize To HTML: ", obj, opts);
 		var def = new defer();
 	
-		opts.response.render(opts.request.templateId,{results: obj},function(err,html){
+		opts.res.render(opts.req.templateId,{results: obj},function(err,html){
 			if (err) {
 				console.log("obj: ", obj);
 				console.log("Error Rendering Template: ", err); 
