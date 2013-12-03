@@ -151,7 +151,6 @@ DME.prototype.getMiddleware=function(opts) {
 		// extract http_* and set those as http headers
 		function(req,res,next){
 			if (req.query) {
-				console.log("req.query: ", req.query);
 				for (param in req.query){
 					if (param.match("http_")){
 						//console.log("param: ", param, req.query[param]);
@@ -215,14 +214,56 @@ DME.prototype.getMiddleware=function(opts) {
 
 		// parse the query string (as rql) 
 		function(req,res,next){
+			var limiter,start,end,limit,maxCount;
+			var limit = Infinity;//TODO: should come from model, 
 			var q= unescape(req._parsedUrl.query);
 			req.originalQuery = req._parsedUrl.query;	
-			if (q) {		
-				req.query =  parser.parse(q);
+			console.log("Process Range Header: ", req.headers);	
+
+			if (req.headers.range) {
+				var range = req.headers.range.match(/^items=(\d+)-(\d+)?$/);
+				console.log("range: ", range);
+				if (range) {
+					start = range[1] || 0;
+					end = range[2];
+					end = (end !== undefined) ? end : Infinity;
+
+					if (end && (end !== Infinity) && (typeof end != "number")) {
+						end = parseInt(end);
+					}	
+					if (start && typeof start!= "number") {
+						start= parseInt(start);
+					}	
+	
+					// compose the limit op
+					if (end >= start) {
+						limit = Math.min(limit, end  - start);
+						// trigger totalCount evaluation
+						maxCount = Infinity;
+					}
+				}
+			}
+			console.log("limit: ", limit, "start: ", start, "maxCount: ", maxCount);
+			// always honor existing finite model.maxLimit
+			if (limit != Infinity) {
+				limiter= "&limit(" + limit + "," + start + "," + maxCount + ")";
 			}else{
-				req.query ="" 
+				limiter="";
 			}
 
+			console.log("limiter: ", limiter);
+			if (q) {		
+				q += limiter;
+				console.log("Qstr: ", q);
+				req.query =  parser.parse(q);
+			}else if (limiter) {
+				req.query =  parser.parse(limiter);
+	
+			}else{
+				req.query = "" 
+			}
+			req.originalQuery = q;
+			console.log("query: ", q);
 			next();
 		},
 
@@ -258,7 +299,9 @@ DME.prototype.getMiddleware=function(opts) {
 
 								console.log("Handler: ", (e===req.dataModel)?"Model":"Facet");
 								if (params.params instanceof Array){
-									return e[params.method].apply(e, params.params.concat([{req:req,res:res}]));
+									var z =  params.params.concat([{req:req,res:res}]);
+									console.log("RPC Params: ", z);
+									return e[params.method].apply(e, z);
 								}else{
 									return e[params.method](params.params,{req:req,res:res});
 								}
@@ -347,11 +390,11 @@ DME.prototype.getMiddleware=function(opts) {
 		},
 
 		function(req,res,next){
-			console.log("res.results: ", res.results);
+//			console.log("res.results: ", res.results);
 			when(res.results, function(results){
-				console.log("Results: ", results);
-				console.log("handle results type: ", typeof results);
-				console.log("AcceptHeader: ", req.headers["accept"]);
+			//	console.log("Results: ", results);
+			//	console.log("handle results type: ", typeof results);
+			//	console.log("AcceptHeader: ", req.headers["accept"]);
 				if (results && results.file){
 					console.log("do download", results);
 					console.log("results.file: ", results.file);
@@ -378,7 +421,7 @@ DME.prototype.getMiddleware=function(opts) {
 					mediaHandlers[h.mimeType] = function(obj){
 						var out = h.serialize(results,{req: req, res: res})
 						when(out, function(out){
-							console.log("out: ", out);
+//							console.log("out: ", out);
 							res.send(out);
 						}, function(err){
 							next("route");
@@ -391,7 +434,9 @@ DME.prototype.getMiddleware=function(opts) {
 			}, function(err){
 				console.log("Error Handling Results: ", err);
 			//	res.render("error", {results: res.results, error: err});
+			//	next();
 				return res.results;
+
 			})
 		}
 	]
@@ -453,7 +498,7 @@ DME.prototype.handleResults=function(req,res,next){
 			mediaHandlers[h.mimeType] = function(obj){
 				var out = h.serialize(results,{req: req, res: res})
 				when(out, function(out){
-					console.log("out: ", out);
+//					console.log("out: ", out);
 					res.send(out);
 				}, function(err){
 					next("route");

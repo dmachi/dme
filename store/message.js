@@ -61,11 +61,26 @@ Store.prototype.query=function(query,opts){
 	//var params = [query || o.req.query,o];
 	
 //	return when(this.send(this.id, "query", [query]), function(results){   //{method: "query", params: params}), function(results){
-	console.log("Message Store Query: ", query);
 	if ((query && typeof query != "string") || !query) {
 		query = unescape(opts.req.originalQuery);
 	}
+
+	console.log("Message Store Query: ", query);
+	if (opts && opts.req && opts.req.headers) {
+		console.log("Query Headers: ", opts.req.headers);
+	}
+
 	return when(this.send(this.id, "query", query), function(results){
+//		console.log("Query Results: ", results);
+		var end = results.start + results.count;
+
+		if (opts && opts.req && opts.req.headers && opts.req.headers.range){ 
+			var end = results.start + results.count;
+//			console.log("opts res: ", opts);
+			var r =  "items " + results.start + "-" + end + "/" + results.totalCount; 
+//			console.log("R: ", r);
+			opts.res.set("content-range",r);
+		}
 		return new LazyArray({
 			some: function(cb){
 				for (var i=0;i<results.count;i++){
@@ -86,7 +101,7 @@ Store.prototype.post=function(obj,opts){
 Store.prototype.put=function(obj, opts){
 //	var o= this.trimOpts(opts);
 //	var params = [obj||o.req.body,o];
-	return this.send(this.id, "put", obj);
+	return this.send(obj, "put", obj);
 }
 
 Store.prototype.delete=function(id, opts){

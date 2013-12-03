@@ -297,15 +297,24 @@ Store.prototype.query= function(query, opts){
 	return deferred;
 }
 
-Store.prototype.post = function(obj, options){
+Store.prototype.put= function(obj, options){
 	var _self=this;
 //	this.db.collection(this.id).update({id: obj.id || options.id},{$set: obj},{multi:false,upsert:true}, function(err){
 
+	var def = new defer();
 
 	console.log("MONGO STORE post()", obj);
-	if (!obj.id) {
-		obj.id = (options&&options.id)?options.id:randomstring.generate(10); 
-		return this.put(obj, options);
+	if (!obj.id || (obj.id && (options&&options.overwrite))) {
+		obj.id = obj.id || ((options&&options.id)?options.id:randomstring.generate(10)); 
+
+		obj = this.normalizeObject(obj);
+
+		this.collection.save(obj, {safe: true}, function(err,obj){
+			console.log("Saved: ", obj);
+			if (err) {def.reject(err); return;}
+			def.resolve(obj);	
+		});	
+		return def.promise;
 	}
 
 
@@ -344,13 +353,12 @@ Store.prototype.post = function(obj, options){
 //			upd[prop]=obj[prop];
 		}
 	}
-	var def = new defer();	
 	if (obj._id) { delete obj._id; }
-	console.log("MONGO UPDATE: ", obj.id, upd);
+	//console.log("MONGO UPDATE: ", obj.id, upd);
 	this.collection.findAndModify({id: obj.id},[],{$set:upd},{multi:false,safe:true}, function(err, resp){
-		console.log("findAndModify Results: ", arguments);		
+		//console.log("findAndModify Results: ", arguments);		
 		if (err){
-			console.log("MONGO UPDATE ERROR: ", err);
+			//console.log("MONGO UPDATE ERROR: ", err);
 			def.reject(err);
 		}
 		_self.get(obj.id).then(function(o){
@@ -361,7 +369,7 @@ Store.prototype.post = function(obj, options){
 };
 
 Store.prototype.normalizeObject= function(obj){
-	console.log("Normalize Obj: ", obj);
+	//console.log("Normalize Obj: ", obj);
 	if (obj._id) { delete obj._id; }
 	var _self=this;
 	var schema = this.schema;
@@ -371,7 +379,7 @@ Store.prototype.normalizeObject= function(obj){
 		//console.log(prop, ": ", typeof obj[prop], typeof s.default);
 		if (s.required){
 			if ((typeof obj[prop]=='undefined') && (typeof s.default!='undefined')){
-				console.log("set to default: obj[prop]:",obj[prop], s['default']); 
+				//console.log("set to default: obj[prop]:",obj[prop], s['default']); 
 				obj[prop]=s['default'];
 			
 			}else if (obj[prop]===undefined){
@@ -382,8 +390,8 @@ Store.prototype.normalizeObject= function(obj){
 		
 		switch(s.type){
 			case "date":
-				console.log("Inspecting Date Value: ");
-				console.log(prop, "Date Obj Val: ", obj[prop], "String?:", typeof obj[prop]=="string", "instanceOf Date: ", obj[prop] instanceof Date);
+				//console.log("Inspecting Date Value: ");
+				//console.log(prop, "Date Obj Val: ", obj[prop], "String?:", typeof obj[prop]=="string", "instanceOf Date: ", obj[prop] instanceof Date);
 
 				if(obj[prop]!==undefined){ 
 					if (obj[prop] instanceof Date){
@@ -402,7 +410,7 @@ Store.prototype.normalizeObject= function(obj){
 				break;
 			default:
 				if ((obj[prop]!==undefined) && (typeof obj[prop] != s.type)){
-					throw Error("Invalid Type in property: ", prop," Should be: ", s.type, " but found ", typeof obj[prop]);
+					throw Error("Invalid Type '" + s.type  + "' in property: " + prop + ". Should be: " + s.type + " but found " + typeof obj[prop]);
 				}
 		}
 	});
@@ -416,22 +424,12 @@ Store.prototype.normalizeObject= function(obj){
 		}	
 	}
 
-	console.log("Normalized Obj : ", obj);
+	//console.log("Normalized Obj : ", obj);
 	return obj;		
 }
 
-Store.prototype.put = function(obj, options){
-	var def = new defer();
-//	this.db.collection(this.id).update({id: obj.id || options.id},{$set: obj},{multi:false,upsert:true}, function(err){
-	var obj = this.normalizeObject(obj);
-
-	console.log("Collection.save()");
-	this.collection.save(obj, {safe: true}, function(err,obj){
-		console.log("Final Object: ", obj);
-		if (err) {def.reject(err); return;}
-		def.resolve(obj);	
-	});	
-	return def.promise;
+Store.prototype.post = function(obj, options){
+	return this.put(obj,options)
 };
 
 Store.prototype.delete = function(id, options){
