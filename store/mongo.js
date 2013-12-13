@@ -308,8 +308,14 @@ Store.prototype.put= function(obj, options){
 		obj.id = obj.id || ((options&&options.id)?options.id:randomstring.generate(10)); 
 
 		obj = this.normalizeObject(obj);
-
+/*
 		this.collection.save(obj, {safe: true}, function(err,obj){
+			console.log("Saved: ", obj);
+			if (err) {def.reject(err); return;}
+			def.resolve(obj);	
+		});	
+*/
+		this.collection.findAndModify({id: obj.id},[],{$set: obj}, {safe:true,upsert:true,"new":true}, function(err,obj){
 			console.log("Saved: ", obj);
 			if (err) {def.reject(err); return;}
 			def.resolve(obj);	
