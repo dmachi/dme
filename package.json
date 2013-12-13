@@ -1,7 +1,7 @@
 {
   "name": "dme",
   "description": "Data Model Engine for Express",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "Dustin Machi",
     "email": "dmachi@dojotoolkit.org"
