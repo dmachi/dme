@@ -192,7 +192,7 @@ Store.prototype.parseQuery=function(query, opts) {
 		});
 		return search;
 	}
-	//dir(['Q:',query]);
+//	console.log('Q:',JSON.stringify(query));
 	search = walk(query.name, query.args);
 	return [options, search];
 }
@@ -235,8 +235,8 @@ Store.prototype.query= function(query, opts){
 		return results;
 	}
 
-	//console.log("Meta: ", meta);
-	//console.log("Search: ", search);
+	console.log("Meta: ", meta);
+	console.log("Search: ", search);
 	// request full recordset length
 //dir('RANGE', options, directives.limit);
 	// N.B. due to collection.count doesn't respect meta.skip and meta.limit

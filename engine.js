@@ -161,7 +161,9 @@ DME.prototype.getMiddleware=function(opts) {
 						req.headers[p]=req.query[param];
 						delete req.query[param];
 						console.log("rp: ", rp);
+						req._parsedUrl.search = req._parsedUrl.search.replace("&"+rp,"");
 						req._parsedUrl.search = req._parsedUrl.search.replace(rp,"");
+						req._parsedUrl.query = req._parsedUrl.query.replace("&"+rp,"");
 						req._parsedUrl.query = req._parsedUrl.query.replace(rp,"");
 						//console.log("Parsed URL: ", req._parsedUrl);
 					}
@@ -216,7 +218,10 @@ DME.prototype.getMiddleware=function(opts) {
 		function(req,res,next){
 			var limiter,start,end,limit,maxCount;
 			var limit = Infinity;//TODO: should come from model, 
-			var q= unescape(req._parsedUrl.query);
+			console.log("q: ", q);
+//			var q= unescape(req._parsedUrl.query);
+			var q = req._parsedUrl.query;
+//			console.log("unescaped: ", q);
 			req.originalQuery = req._parsedUrl.query;	
 			console.log("Process Range Header: ", req.headers);	
 

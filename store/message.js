@@ -61,7 +61,7 @@ Store.prototype.query=function(query,opts){
 	//var params = [query || o.req.query,o];
 	
 //	return when(this.send(this.id, "query", [query]), function(results){   //{method: "query", params: params}), function(results){
-	if ((query && typeof query != "string") || !query) {
+	if ((query && typeof query != "string") || (!query&&opts && opts.req && opts.req.originalQuery)) {
 		query = unescape(opts.req.originalQuery);
 	}
 
@@ -69,6 +69,8 @@ Store.prototype.query=function(query,opts){
 	if (opts && opts.req && opts.req.headers) {
 		console.log("Query Headers: ", opts.req.headers);
 	}
+
+	query = escape(query);
 
 	return when(this.send(this.id, "query", query), function(results){
 //		console.log("Query Results: ", results);
