@@ -118,7 +118,14 @@ DME.prototype.handleMessage=function(msg,socket){
 	var method = msgParts[1] || "get";
 	var facet = this._Facets[modelId].message
 	var model = this._Models[model];
-	var params = msg.payload.params;
+	var params = msg.payload.params || msg.payload;
+
+	console.log("Params: ", params);
+	if (typeof params=="string"){
+		params = unescape(params);
+	}
+
+	console.log("Params: ", params);
 
 	var executor = getExecutor(method,facet,model);
 
@@ -129,7 +136,7 @@ DME.prototype.handleMessage=function(msg,socket){
 	}
 
 	if (executor){
-		when(executor.apply(this, [msg.payload,routeOpts]), function(results){
+		when(executor.apply(this, [params,routeOpts]), function(results){
 			if (facet.excludedProperties) {
 				results = _self.filterObjectProperties(results, facet.excludedProperties);
 			}
@@ -218,16 +225,16 @@ DME.prototype.getMiddleware=function(opts) {
 		function(req,res,next){
 			var limiter,start,end,limit,maxCount;
 			var limit = Infinity;//TODO: should come from model, 
-			console.log("q: ", q);
-//			var q= unescape(req._parsedUrl.query);
-			var q = req._parsedUrl.query;
-//			console.log("unescaped: ", q);
+//			console.log("q: ", q);
+			var q= req&&req._parsedUrl&&req._parsedUrl.query?unescape(req._parsedUrl.query):"";
+//			var q = req._parsedUrl.query;
+			console.log("unescaped: ", q);
 			req.originalQuery = req._parsedUrl.query;	
-			console.log("Process Range Header: ", req.headers);	
+//			console.log("Process Range Header: ", req.headers);	
 
 			if (req.headers.range) {
 				var range = req.headers.range.match(/^items=(\d+)-(\d+)?$/);
-				console.log("range: ", range);
+			//	console.log("range: ", range);
 				if (range) {
 					start = range[1] || 0;
 					end = range[2];
@@ -252,14 +259,12 @@ DME.prototype.getMiddleware=function(opts) {
 			// always honor existing finite model.maxLimit
 			if (limit != Infinity) {
 				limiter= "&limit(" + limit + "," + start + "," + maxCount + ")";
-			}else{
-				limiter="";
 			}
 
 			console.log("limiter: ", limiter);
 			if (q) {		
 				q += limiter;
-				console.log("Qstr: ", q);
+				//console.log("Qstr: ", q);
 				req.query =  parser.parse(q);
 			}else if (limiter) {
 				req.query =  parser.parse(limiter);
@@ -276,7 +281,7 @@ DME.prototype.getMiddleware=function(opts) {
 			var httpMethod = req.method;
 			var storeMethod = req.storeMethod;
 
-			console.log("Endpoint: ",req.model);
+			//console.log("Endpoint: ",req.model);
 			if (!req.facet[storeMethod] && !((req.facet.rpcMethods=="*")||(req.facet.rpcMethods&&(req.facet.rpcMethods.indexOf(storeMethod)>=0))) ){
 				console.log("req.facet[storeMethod]: ", req.facet[storeMethod], req.model[storeMethod], req.facet);
 				return next("route");

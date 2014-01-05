@@ -61,26 +61,31 @@ Store.prototype.query=function(query,opts){
 	//var params = [query || o.req.query,o];
 	
 //	return when(this.send(this.id, "query", [query]), function(results){   //{method: "query", params: params}), function(results){
-	if ((query && typeof query != "string") || (!query&&opts && opts.req && opts.req.originalQuery)) {
-		query = unescape(opts.req.originalQuery);
+	if ((query && typeof query != "string") || !query) {
+		if (!opts && !opts.req && !opts.req.originalQuery){
+			console.log("query issue opts.req: ", opts.req);
+			query="";
+		}else{
+			query = unescape(opts.req.originalQuery);
+		}
 	}
 
 	console.log("Message Store Query: ", query);
 	if (opts && opts.req && opts.req.headers) {
 		console.log("Query Headers: ", opts.req.headers);
 	}
+	query = query?escape(query):"";
 
-	query = escape(query);
-
+	console.log('sending query: ', query);
 	return when(this.send(this.id, "query", query), function(results){
-//		console.log("Query Results: ", results);
+		console.log("Query Results: ", results);
 		var end = results.start + results.count;
 
 		if (opts && opts.req && opts.req.headers && opts.req.headers.range){ 
 			var end = results.start + results.count;
-//			console.log("opts res: ", opts);
+			console.log("opts res: ", opts);
 			var r =  "items " + results.start + "-" + end + "/" + results.totalCount; 
-//			console.log("R: ", r);
+			console.log("R: ", r);
 			opts.res.set("content-range",r);
 		}
 		return new LazyArray({
