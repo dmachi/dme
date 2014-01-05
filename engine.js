@@ -223,8 +223,10 @@ DME.prototype.getMiddleware=function(opts) {
 
 		// parse the query string (as rql) 
 		function(req,res,next){
-			var limiter,start,end,limit,maxCount;
+			var limiter,start,end,limit;
 			var limit = Infinity;//TODO: should come from model, 
+			var start = 0;
+			var maxCount=Infinity;
 //			console.log("q: ", q);
 			var q= req&&req._parsedUrl&&req._parsedUrl.query?unescape(req._parsedUrl.query):"";
 //			var q = req._parsedUrl.query;
@@ -259,6 +261,8 @@ DME.prototype.getMiddleware=function(opts) {
 			// always honor existing finite model.maxLimit
 			if (limit != Infinity) {
 				limiter= "&limit(" + limit + "," + start + "," + maxCount + ")";
+			}else{
+				limiter = "&limit(" + maxCount + "0," + maxCount + ")";
 			}
 
 			console.log("limiter: ", limiter);
