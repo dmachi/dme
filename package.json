@@ -26,5 +26,12 @@
     "shasum": "dcffde26e8a8c95eb428be46a45d23efd619c6ec"
   },
   "_from": "dme@0.3.2",
-  "_resolved": "https://registry.npmjs.org/dme/-/dme-0.3.2.tgz"
+  "_resolved": "https://registry.npmjs.org/dme/-/dme-0.3.2.tgz",
+  "dependencies": {
+	"solr-client":"*",
+	"nodegit": "*",
+	"fs-extra": "*",
+	"nodegit":"*",
+	"git-http-backend":"*"
+  }
 }

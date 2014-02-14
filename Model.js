@@ -9,7 +9,6 @@ var Model = exports.Model= function(store,opts){
 	this.store = store;
 	this.opts = opts;
 	this.setSchema(this.schema);
-
 }
 
 util.inherits(Model,EventEmitter);

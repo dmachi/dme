@@ -1,34 +1,36 @@
 var parser = require("rql/parser");
 var EventEmitter = require('events').EventEmitter;
 var util=require("util");
+var declare = require("dojo-declare/declare");
 
-var Store = exports.Store = function(options){
-	EventEmitter.call(this);
-	this.options=options;
-}
+var store = exports.Store = declare([EventEmitter], {
+	constructor: function(id, options) { 
+		console.log("Options: ", options);
+		this.id = id;
+		this.options=options;
+		this.init();
+	},
+	"setSchema":function(schema){
+		this.schema=schema;
+	},
+	"parseQuery": function(query,opts){
+		// IMPLEMENT IN SUBCLASS		
+	},
 
-util.inherits(Store, EventEmitter);
+	"get":function(id,opts){
+		// IMPLEMENT IN SUBCLASS		
+	},
 
-Store.prototype.setSchema=function(schema){
-	this.schema=schema;
-}
+	"query":function(query, opts){
+		// IMPLEMENT IN SUBCLASS		
+	},
 
-Store.prototype.parseQuery=function(query,opts){
-}
+	"put":function(obj, opts){
+		// IMPLEMENT IN SUBCLASS		
+	},
 
-Store.prototype.get=function(id,opts){
-	return this.store.get(id, opts);
-}
-
-Store.prototype.query=function(query, opts){
-	return this.store.query(query, opts);
-}
-
-Store.prototype.put=function(obj, opts){
-	return this.store.put(obj, opts);
-}
-
-Store.prototype.delete=function(id, opts){
-	return this.store.delete(id, opts);
-}
+	"delete": function(id, opts){
+		// IMPLEMENT IN SUBCLASS		
+	}
+});
 

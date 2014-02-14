@@ -35,13 +35,14 @@ DME.prototype.init=function(skipRegisterRoute){
 	var _self=this;
 	Object.keys(this.models).forEach(function(prop){  //for (var prop in this.models){
 		var M = this.models[prop];
-		if(M.storeOpts){
-			console.log("Using Provided storeOpts: ", M.storeOpts);
-			this._Stores[prop] = M.Store = new M.store(M.collectionId || prop,M.storeOpts);
-		}else{
-			this._Stores[prop] = M.Store = new M.store(M.collectionId || prop,this.opts.database[M.store.prototype.authConfigProperty]);
-		}
+		var opts = M.storeOpts || {};
+		console.log("DatabaseOptions: ", _self.opts.database);
+		var auth = ((_self.opts.database && _self.opts.database[prop])?_self.opts.database[prop]:_self.opts.database[M.store.prototype.authConfigProperty])||{};
+		opts.auth = auth;
+		console.log("DB INIT Options: ", M.collectionId?M.collectionId:prop, opts);
+		this._Stores[prop] = M.Store = new M.store(M.collectionId || prop,opts);
 		this._Models[prop] = M.Model =  new M.model(M.Store, this.opts);
+	
 		if (M.notifications){
 			this._Models[prop].on('message', function(msg){
 				console.log("Emitting Notification Message from DME");
@@ -63,7 +64,10 @@ DME.prototype.init=function(skipRegisterRoute){
 }
 
 DME.prototype.declareGlobal = function(prop, facet, model,scope){
-	var gid = (model && model.schema && model.schema.id)?model.schema.id:prop;
+	console.log("Declare Global: ", prop);
+//	console.log(facet, model);
+	var gid = (model && model.id && model.id)?model.id:prop;
+	console.log("gid: ", gid);
 	scope = scope || global;
 	
 	if (scope[gid]){
@@ -114,8 +118,10 @@ DME.prototype.handleMessage=function(msg,socket){
 		return;
 	}
 
+	console.log("ModelId: ", modelId);
 	var modelId = msgParts[0];
 	var method = msgParts[1] || "get";
+	console.log("ModelId: ", modelId);
 	var facet = this._Facets[modelId].message
 	var model = this._Models[model];
 	var params = msg.payload.params || msg.payload;
@@ -137,14 +143,17 @@ DME.prototype.handleMessage=function(msg,socket){
 
 	if (executor){
 		when(executor.apply(this, [params,routeOpts]), function(results){
+			console.log("Executor Results: ",results);
 			if (facet.excludedProperties) {
 				results = _self.filterObjectProperties(results, facet.excludedProperties);
 			}
 			_self.send("DataModel/" + modelId +  "/" + method + "/result",results,routeOpts);
 		}, function(error){
+			console.log("Executor Error Handler", error);
 			_self.send("DataModel/" + modelId +  "/" + method + "/error",{error: 500, message: "Error Executing RPC Method: " + error},routeOpts);
 		}) 
 	}else{
+		console.log("No Executor");
 		_self.send("DataModel/" + modelId +  "/" + method + "/error",{error: 404, message: "Unabled to Find or Access RPC Method: " + method},routeOpts);
 
 	}	
@@ -198,6 +207,7 @@ DME.prototype.getMiddleware=function(opts) {
 		},
 
 		function(req,res,next){
+			console.log("Check Store Method");
 			var m = req.storeMethod = req.method.toLowerCase();
 			console.log("m: ", m, "req.body.method", req.body.method);
 			if ((m=="get") && (!req.params['id'])){
@@ -212,9 +222,13 @@ DME.prototype.getMiddleware=function(opts) {
 
 			//set a templateId
 		function(req,res,next){
+			console.log("Check Headers");
 			req.templateId = req.model;
 			if (req.storeMethod == "query") {
 				req.templateId=req.model + "-list";
+			}
+			if (req.headers && req.headers.templateStyle){
+				req.templateId = req.templateId + "-" + req.headers.templateStyle;
 			}
 			console.log("Using Template: ", req.templateId);	
 			next();
@@ -223,14 +237,15 @@ DME.prototype.getMiddleware=function(opts) {
 
 		// parse the query string (as rql) 
 		function(req,res,next){
+			console.log("process rql");
 			var limiter,start,end,limit;
 			var limit = Infinity;//TODO: should come from model, 
+			var requestedLimit;
 			var start = 0;
 			var maxCount=Infinity;
 //			console.log("q: ", q);
 			var q= req&&req._parsedUrl&&req._parsedUrl.query?unescape(req._parsedUrl.query):"";
 //			var q = req._parsedUrl.query;
-			console.log("unescaped: ", q);
 			req.originalQuery = req._parsedUrl.query;	
 //			console.log("Process Range Header: ", req.headers);	
 
@@ -251,33 +266,42 @@ DME.prototype.getMiddleware=function(opts) {
 	
 					// compose the limit op
 					if (end >= start) {
-						limit = Math.min(limit, end  - start);
+						requestedLimit = Math.min(limit, end  - start);
 						// trigger totalCount evaluation
 						maxCount = Infinity;
 					}
 				}
 			}
-			console.log("limit: ", limit, "start: ", start, "maxCount: ", maxCount);
-			// always honor existing finite model.maxLimit
-			if (limit != Infinity) {
-				limiter= "&limit(" + limit + "," + start + "," + maxCount + ")";
-			}else{
-				limiter = "&limit(" + maxCount + "0," + maxCount + ")";
+
+			var parsed = parser.parse(q);
+			if (!requestedLimit) {
+				requestedLimit = parsed&&parsed.cache&& parsed.cache.limit && parsed.cache.limit[0]?parsed.cache.limit[0]:0;
+			}
+			if (!requestedLimit || requestedLimit > limit) {
+				// always honor existing finite model.maxLimit
+				if (limit != Infinity) {
+					limiter= "&limit(" + limit + "," + start + "," + maxCount + ")";
+				}//else{
+				//	limiter = "" //&limit(" + maxCount + ",0," + maxCount + ")";
+				//}
+				q = (q||"") + (limiter || "");
 			}
 
-			console.log("limiter: ", limiter);
-			if (q) {		
-				q += limiter;
-				//console.log("Qstr: ", q);
-				req.query =  parser.parse(q);
-			}else if (limiter) {
-				req.query =  parser.parse(limiter);
-	
-			}else{
-				req.query = "" 
-			}
-			req.originalQuery = q;
+			req.query =  parser.parse(q);
+//			req.originalQuery = q;
 			console.log("query: ", q);
+			next();
+		},
+
+		function(req,res,next) {
+			var httpMethod = req.method;
+			var storeMethod = req.storeMethod;
+		
+			console.log("checking storeMethod: ", storeMethod);	
+			req.storeParams = req.params.id || req.params[0];
+			if (storeMethod=="post" || storeMethod=="put"){
+				req.storeParams = req.body || {};
+			}
 			next();
 		},
 
@@ -285,7 +309,7 @@ DME.prototype.getMiddleware=function(opts) {
 			var httpMethod = req.method;
 			var storeMethod = req.storeMethod;
 
-			//console.log("Endpoint: ",req.model);
+			console.log("Endpoint: ",req.model);
 			if (!req.facet[storeMethod] && !((req.facet.rpcMethods=="*")||(req.facet.rpcMethods&&(req.facet.rpcMethods.indexOf(storeMethod)>=0))) ){
 				console.log("req.facet[storeMethod]: ", req.facet[storeMethod], req.model[storeMethod], req.facet);
 				return next("route");
@@ -329,7 +353,7 @@ DME.prototype.getMiddleware=function(opts) {
 						throw errors.Forbidden("Account does not have access to the ' + params.method + ' RPC method");
 					}
 
-					res.results = fn(req.params, {req: req, res:res});
+					res.results = fn(req.storeParams, {req: req, res:res});
 				}
 				console.log("Default Handler: ", req.model, storeMethod);
 				if (req.dataModel[storeMethod]){
@@ -340,32 +364,40 @@ DME.prototype.getMiddleware=function(opts) {
 				console.log("storeMethod: ", storeMethod);
 				console.log("Custom Facet Handler");
 				console.log("req.body: ", req.body);
-				console.log("req.params: ", req.params);
-				var p = req.params.id || req.params[0];
-				if (storeMethod=="post" || storeMethod=="put"){ p = req.body; }
-				res.results = req.facet[storeMethod](p, {req: req, res: res});
+				console.log("req.params: ", req.storeParams);
+				
+				res.results = req.facet[storeMethod](req.storeParams, {req: req, res: res});
 			}
-
-			next();
+			
+			console.log('res.results_1: ', res.results);
+			when(res.results, function(results){
+				console.log('res.results_2: ', results);
+				if (results && results.stream) {
+					return;
+				}	
+				next();
+			});
 	
-			console.log('req.params: ', req.params);
-			console.dir(req.query);
 		},
 
 		function(req, res, next){
-			 when(req.results, function(results){
+			 when(res.results, function(results){
+				console.log("rpc check", res.results); 
 				//if we're processing an rpc call, just return results
 				//the rpc method is responsible for filtering any resultant properties
-				console.log("res.results processing: ", results, arguments);
+			//	console.log("res.results processing: ", results, arguments);
+				if (results && results.stream) { return; }
 				if (!results && (results!==false)){
 					throw errors.NotFound("No Results Found");
 					next("route");
 				}
 
-				if (res.results && res.results.file){
+				if (res.results && (res.results.file || res.results.buffer || res.results.stream)){
 				//	res.download(res.results.file);
-					return res.results; 
+					next();
+					return;
 				}
+
 
 				if (req.storeMethod=="rpc"){
 					console.log("RPC Results: ", results);
@@ -399,12 +431,13 @@ DME.prototype.getMiddleware=function(opts) {
 			}, function(e){
 				console.log("Facet Call error: ", e);
 				//res.send(404, e.name, e.toString());
-				next(e);
+				//next("route");
 			})
 		},
 
 		function(req,res,next){
 //			console.log("res.results: ", res.results);
+			if (!res.results || !res.results.stream) {
 			when(res.results, function(results){
 			//	console.log("Results: ", results);
 			//	console.log("handle results type: ", typeof results);
@@ -428,11 +461,27 @@ DME.prototype.getMiddleware=function(opts) {
 //					}
 					return;
 				}
+
+				if (results && results.buffer) {
+					if (results.mimeType) {
+						res.set("content-type", results.mimeType);
+					}
+					res.send(200,results.buffer);
+					return;
+				}
+
+				if (results && results.stream) {
+					console.log("results.stream: ", !!results.stream);
+					//req.pipe(results.stream).pipe(res);
+					return;
+				}else {
+
 				var mediaHandlers = {}
 				_self.mediaHandlers.map(function(h){
-				console.log("handler: ", h);
-			
+					console.log("handler: ", h);
+					
 					mediaHandlers[h.mimeType] = function(obj){
+						console.log("Serialize type: ", h.mimeType);
 						var out = h.serialize(results,{req: req, res: res})
 						when(out, function(out){
 //							console.log("out: ", out);
@@ -444,14 +493,15 @@ DME.prototype.getMiddleware=function(opts) {
 				})
 				console.log("Media Handlers: ", mediaHandlers);
 				res.format(mediaHandlers);
-						
+				}		
 			}, function(err){
 				console.log("Error Handling Results: ", err);
 			//	res.render("error", {results: res.results, error: err});
 			//	next();
-				return res.results;
+				next(err);	
 
 			})
+			}
 		}
 	]
 }
@@ -465,7 +515,6 @@ DME.prototype.registerRoute=function(endpoint,facet,model,expressApp){
 	app.all("/" + endpoint + "/:id(*)"  , function(req, res, next){
 //		req.params.id = (req.params.id)?req.params.id.substr(1):"";
 		req.model=endpoint;
-		console.log("Set .dataModel: ", model);
 		req.dataModel = model;
 		req.facet = facet; 
 		console.log("Request for ", endpoint, " Method: ", req.method, req.params.id);
@@ -475,7 +524,6 @@ DME.prototype.registerRoute=function(endpoint,facet,model,expressApp){
 	app.all("/" + endpoint + "$"  , function(req, res, next){
 		req.model=endpoint;
 
-		console.log("Set .dataModel: ", model);
 		req.dataModel = model;
 		req.facet = facet; 
 		console.log("Request for Model:", endpoint, " Method: ", req.method);
@@ -495,7 +543,8 @@ DME.prototype.filterObjectProperties=function(obj, excluded){
 	
 DME.prototype.handleResults=function(req,res,next){
 	var _self=this;
-//	console.log("res.results: ", res.results);
+	console.log("res.results: ", res.results);
+	if (res.results.stream) { return res.results; }
 	when(res.results, function(results){
 		console.log("Results: ", results);
 		console.log("handle results type: ", typeof results);
@@ -554,6 +603,7 @@ DME.prototype.registerExpressRoutes=function(expressApp){
 }
 
 DME.prototype.setupGlobals = function(scope){
+	console.log("Setup Globals");
 	for (prop in this.models){
 		this.declareGlobal(prop,this._Facets[prop],this._Models[prop], scope);
 	}
