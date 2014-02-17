@@ -3,6 +3,7 @@ var defer = require("promised-io/promise").defer;
 var when = require("promised-io/promise").when;
 var All = require("promised-io/promise").all;
 var ArrayQuery = require("rql/js-array").query;
+var LazyArray = require("promised-io/lazy-array").LazyArray;
 var git = require("nodegit");
 var declare = require("dojo-declare/declare");
 var fs = require("fs-extra");
@@ -11,19 +12,75 @@ var uuid = require("node-uuid");
 var mime = require("mime");
 var spawn = require('child_process').spawn;
 var rawGitHandler = require('git-http-backend');
-
+var glob=require('glob');
 
 var Store = exports.Store=declare([StoreBase],{
 	authConfigProperty: "git",
 	primaryKey: "id",
 	metadataFilename: "_metadata.json",
 	init: function(){
-		console.log("Init Git Store", this.options.auth);
-		this.setupStore(this.options.auth.path + "/" + this.id + "/"); 
+		this.setupStore(this.options.auth.path + "/" + this.id); 
 	},
+
+	scanRepos: function(){
+		var def = new defer();
+		glob("**/HEAD", {cwd:this.basePath}, function(err,files){
+			if (err) { return def.reject(err); }
+			var out = files.map(function(f){  var x = f.split("/"); x.pop(); return x.join("/") });
+			def.resolve(out);
+		});		
+		return def.promise;
+	},
+
+	loadIndex: function() {
+		var _self=this;	
+		var index=[];
+		var d = new defer();
+		when(this.scanRepos(), function(scanRes){
+			var defs=[];
+			scanRes.forEach(function(repoPath){
+				var def = new defer();
+				var objPath=Path.join(_self.basePath,repoPath);
+				var id = repoPath.replace(_self.basePath,"").split("/").join("-");
+				//console.log("Load Repository for ID: ", id, repoPath);
+				when(_self.getRepository(id), function(repo){
+					if (!repo) {
+						console.log("Unable to read repo at: ", repo);
+						def.resolve(true);
+					}
+
+					when(_self.getMetadata(repo,id),function(md){
+						if (md) {
+							console.log("Push Metadata for ", md.id, " into index.\n");
+							index.push(md);	
+							index[md.id]=md;
+							return def.resolve(true);
+						}
+					}, function(err){
+						console.log("Error getting metadata: ", err);
+						return def.resolve(true);
+					});
+				}, function(err){
+					console.log("Unable to read repo for " + id);
+				});
+				defs.push(def.promise);
+
+			});
+
+			when(All(defs), function(){
+				d.resolve(index);
+			});
+
+		});	
+
+	
+		return d.promise;
+	},
+
 
 	setupStore: function(path){
 		this.basePath = path;
+		var _self=this;
 		console.log("Base Path: ", this.basePath);
 		var def = new defer();
 		fs.stat(this.basePath, function(err,stats){
@@ -37,23 +94,26 @@ var Store = exports.Store=declare([StoreBase],{
 				});	
 				return;
 			}
-			def.resolve(true);
+			when(_self.loadIndex(), function(index){
+				_self._index = index;
+				def.resolve(true);
+			});
 		});
 
 		return def.promise;
 	},
 
 	handleRawGit: function(repoId,url,opts){
-                       console.log("Handle Raw Git url: ",url );
-                       console.log("Handle Raw Git repoId: ", repoId);
+	//	console.log("Handle Raw Git url: ",url );
+	//	console.log("Handle Raw Git repoId: ", repoId);
 		var def = new defer()
 		url = opts.req.originalUrl;	
 		var idParts = repoId.split("-");
 
 		var lastRepoPart = idParts[idParts.length-1];
-		var objectPath = this.basePath + idParts.join("/");	
-		console.log("Repo Path: ", objectPath);
-		console.log("url: ", url);
+		var objectPath = Path.join(this.basePath,idParts.join("/"));	
+		//console.log("Repo Path: ", objectPath);
+		//console.log("url: ", url);
 	//	delete opts.req.headers['accept']
 
 		var gb = opts.req.pipe(rawGitHandler(url, function(err,service){
@@ -62,9 +122,9 @@ var Store = exports.Store=declare([StoreBase],{
 				if (err) return opts.res.send(err + '\n');
 			}
 			opts.res.set('content-type', service.type);
-			console.log("Service Type: ", service.type);
+			//console.log("Service Type: ", service.type);
 			var args =  service.args.concat([objectPath]);
-			console.log("Service Args: ", args);
+			//console.log("Service Args: ", args);
 			console.log(service.cmd, service.action, repoId, service.fields, args);
 			var ps = spawn(service.cmd, args);
 			ps.stdout.pipe(service.createStream()).pipe(ps.stdin);
@@ -80,20 +140,22 @@ var Store = exports.Store=declare([StoreBase],{
 		var id = parts.shift();
 		var subPath = parts.join("/");
 
-		var idParts = id.split("-");
-		var objectPath = this.basePath + idParts.join("/");	
 		var _self=this;
 		if (opts && opts.rawGitRequest){
 			return this.handleRawGit(opts.repoId,opts.subPath,opts);
 		}
 
-		var repo = this.getRepository(objectPath);
-
-		if (!subPath){
-			return _self.getMetadata(repo,id);
-		}
-
-		return _self.getFile(repo,id,subPath);
+		return when(this.getRepository(id),function(repo){
+			if (!repo) { return; }
+			console.log("SubPath: ", subPath);
+			if (!subPath){
+				console.log("No SubPath, getting Metadata: ", fullId);
+				return _self.getMetadata(repo,id,true);
+			}
+	
+			console.log("Get File: ", subPath);
+			return _self.getFile(repo,id,subPath);
+		});
 	},
 
 
@@ -105,22 +167,16 @@ var Store = exports.Store=declare([StoreBase],{
 			repo.getMaster(function(error,branch) {
 				if (error) { console.log("Branch Not Found"); return; def.reject("Unable to Open Master Branch: " + error); }
 				branch.getTree(function(error, tree) {
-					console.log("Get ", filename, " from tree");	
 					tree.getEntry(filename, function(err,entry){
 						if (err || !entry) { console.log("File Not Found: ", filename); def.resolve("");return; }
-						console.log("Entry: ", entry.path(), entry.name(), entry.isFile());
 						if (entry.isFile()) {
-							console.log("File Entry: ", entry.path(), entry.name());
 							entry.getBlob(function(err,blob) {
 								if (err || !blob) { def.reject(err); }
 								def.resolve({id: Path.join(id,filepath), mimeType: mime.lookup(filepath),binary: blob.isBinary(), buffer: blob.content()});
 							});
 						}else if (entry.isTree()){
-							console.log("Get Folder ",entry.path(), entry.name());
-//							var folder = entry.getTree();
 							entry.getTree(function(err,folder) {
 								when(_self.getManifestFromTree(folder,entry), function(manifest){
-									console.log("Manifest: ", manifest);
 									def.resolve({id: filepath, name: entry.name(), manifest: manifest});
 								});	
 							});
@@ -189,27 +245,36 @@ var Store = exports.Store=declare([StoreBase],{
 		return def.promise;
 	},
 
-	getMetadata: function(repo,id){
+	getMetadata: function(repo,id,includeManifest){
 		var _self=this;
 		var def = new defer();
-		var metadataObject = {id:id,manifest:[]};
 		when(repo, function(repo) {
 			repo.getMaster(function(error,branch) {
 				if (error) { console.log("Branch Not Found"); return; def.reject("Unable to Open Master Branch: " + error); }
 
-				metadataObject.updatedOn=branch.timeMs() 
-				branch.getTree(function(error, tree) {
-					tree.getEntry(_self.metadataFilename, function(err,entry){
-						entry.getBlob(function(err,blob){
+				branch.getTree(function(getTreeError, tree) {
+					if (getTreeError) { console.log("isHEAD", tree.isHead()); return def.reject(getTreeError); }
+					tree.getEntry(_self.metadataFilename, function(getEntryErr,entry){
+						if (getEntryErr) { console.log("getEntry: ", getEntryErr); return def.reject(getEntryErr); }
+						entry.getBlob(function(getBlobErr,blob){
+							if (getBlobErr) { console.log("GetBlobERR" , getBlobErr); return def.reject(getBlobErr); }	
+							var metadataObject = {id:id};
 							var o = blob.toString()
-							console.log("STRING BLOB: ", o);
-							o= JSON.parse(o);
-							for (prop in o) { metadataObject[prop] = o[prop]; }
-
-							when(_self.getManifestFromTree(tree), function(manifest){
-								metadataObject.manifest = manifest;
+								
+							try {
+								o= JSON.parse(o);
+								for (prop in o) { metadataObject[prop] = o[prop]; }
+							}catch(err){
+								def.reject("Unable To Parse (" + id + "): "+err);
+							}
+							if (includeManifest) {		
+								when(_self.getManifestFromTree(tree), function(manifest){
+									metadataObject.manifest = manifest;
+									def.resolve(metadataObject);
+								});
+							}else{
 								def.resolve(metadataObject);
-							});
+							}
 						});
 					});
 				})
@@ -226,10 +291,9 @@ var Store = exports.Store=declare([StoreBase],{
 			branch.getTree(function(error, tree) {
 				if (error) throw error;
 				var entries = tree.entries();
-				console.log("TreeEntries: ", tree.entries());
 
 				entries.forEach(function(entry) {
-					console.log("Entry - Path ", entry.path(), " Name: ", entry.name(), " File: ", entry.isFile()?"True":"False");
+					//console.log("Entry - Path ", entry.path(), " Name: ", entry.name(), " File: ", entry.isFile()?"True":"False");
 				});
 
 			});
@@ -239,19 +303,18 @@ var Store = exports.Store=declare([StoreBase],{
 	},
 
 	query: function(query,opts){
-		return ArrayQuery(query,opts,this.data);
-	},
-
-	add: function(obj,opts){
-		var id = (opts&&opts.id)?opts.id: uuid.v4();	
-		obj.id = id;
-		this.put(obj,opts);	
+		//console.log("query: ", query, "data:", this._index);
+		return when(ArrayQuery(query,opts,this._index),function(res){
+			//console.log("Results: ", res);
+			return res;
+		});
 	},
 
 	post: function(obj,opts){
 	//	console.log("POST: ", obj);
+	//	console.log("Git Store Post: ", obj);
+
                 if (opts && opts.rawGitRequest){
-			console.log("raw git POST: ", opts.repoId, opts.subPath);
                         return this.handleRawGit(opts.repoId,opts.subPath,opts);
                 }      
 		var _self=this;
@@ -259,215 +322,238 @@ var Store = exports.Store=declare([StoreBase],{
 		var defs=[]
 
 		if (!obj.id) {
-			return this.add(obj,opts);	
+			console.log("Collection Not Found, creating new collection");
+			obj.id=(opts&&opts.id)?opts.id: uuid.v4();
+			opts.overwrite = false;
 		}else{
-			if (obj.files) {
-				obj.files = Object.keys(obj.files).map(function(key){
-					var f = obj.files[key];
-					return {upload: true, tempPath: f.path, filename:Path.join(obj.basePath,f.originalFilename)};
-				});
-			}
-			
-			return this.put(obj,opts)
+			opts.overwrite = true;
 		}
 
+		return this.put(obj,opts)
+
 	},
+
+	getFileBuffers: function(files){
+		//console.log("getFileBuffers: ", files);
+		var fbs= []
+		var defs = files.map(function(f){
+			if (f.type=="text"){
+				var c = f.content;
+				if (typeof c!='string'){
+					c = JSON.stringify(c);
+				}
+				f.buffer = new Buffer(c);	
+				fbs.push(f);
+				return true;
+			}		
+			if (f.type=="upload"){
+				var def = new defer();
+				if (f.tempPath) {
+					fs.readFile(f.tempPath, function(err,data){
+						f.buffer = data;
+						fbs.push(f);
+						def.resolve(true);
+					});
+				}else{
+					console.log("Temp Path Not found for uploaded file", fs.tempPath, f)
+				}
+				return def.promise;
+			}
+			return true;
+				
+		});
+		return when(All(defs), function(){
+			return fbs;
+		});
+	},
+
 	put: function(obj, opts){
-		console.log("GIT PUT OBJ: ", obj);
-	//	console.log("GIT PUT OPTS REQ: ", opts.req);
+		//console.log("GIT PUT OBJ: ", obj);
 
 		if (opts.rawGitRequest) {
 			return this.handleRawGit(opts.repoId,opts.subPath,opts);
 		}
-		var idParts = obj.id.split("-");
-		var objectPath = this.basePath + idParts.join("/");	
-		var _self=this;
-		var repo = this.getRepository(objectPath)
 
-		if (obj.files) {
-			return when(repo, function(repo){
-				var author = (opts && opts.author)?opts.author:{name: "System", email: "system"};
-				return when(_self.commitFilesToRepo(repo, obj.files, "Uploaded Files", author),function(){
-					return {status: "ok"}
-				});
-			});
+
+		var _self=this;
+		var putDef = new defer();
+
+		if (!obj.id) {
+			return putDef.reject("Not Found");	
 		}
 
-		var fileName = this.metadataFilename;
-		var fileContent = JSON.stringify(obj);
 		var author = (opts && opts.author)?opts.author:{name: "System", email: "system"};
-		var files = []
-		files.push({blobName: this.metadataFilename, type: "text", content: JSON.stringify(obj)});
 
-		return when(repo, function(repo) {
-			//create the file in the repo's workdir
-			return _self.commitFilesToRepo(repo, files,"commit message", author);
-		});
-	},
-	initializeRepository: function(path,initialContent) {
-		var def = new defer();
-		var _self=this;
-		console.log("Initialize New Collection: ", path);
-		fs.mkdirs(path, function(err) {
-			if (err) { def.reject(err);return; }
-			console.log("\tCreated new directory: ", path);
-			git.Repo.init(path,true,function(err,repo){
-				console.log("\tCreated new collection repository: ", repo);
-				if (initialContent) {
-					var str = JSON.stringify(initialContent);
-					buffer = new Buffer(str);
-					console.log("Created Buffer");
-					repo.createBlobFromBuffer(buffer, function(err,blob) {
-						if (err) { throw err; }
-						console.log("Building Tree");
-						var tb = repo.treeBuilder();
-						tb.insert(_self.metadataFilename,blob,0100644);
-						console.log("Writing Tree");
-						tb.write(function(treeWriteError,treeId){
-							console.log("tb.write arguments", arguments);
-							if (treeWriteError) { throw treeWriteError; }
+		when(_self.getRepository(obj.id),function(repo){
+			//console.log("Get Repo Results: ", repo);
+
+			if (!repo) {
+				repo = _self.createRepository(obj.id);
+			}
+			when(repo, function(repo) {
+				//console.log("Got Repo: ", repo);
+				var fileBuffers = [];
+				if (opts.files) {
+					fileBuffers = _self.getFileBuffers(opts.files);
+				}
+
+				when(fileBuffers, function(fileBuffers) {
+					var metaFile = {filename: _self.metadataFilename, type: "text",buffer: new Buffer(JSON.stringify(obj)) }	
+					fileBuffers.push(metaFile);
+
+					if (!fileBuffers || fileBuffers.length < 1) {
+						putDef.reject("No Content To Update");	
+					}
 				
-							console.log("Create Commit");	 
-							var author = git.Signature.create("system", "system@system", 123456789, 60);
-							var committer = git.Signature.create("system", "system@system", 987654321, 90);
-
-							repo.createCommit("HEAD", author, committer, "Inital Commit", treeId,[], function(error, commitId) {
-								console.log("New Commit:", commitId.sha());
-								def.resolve(repo);
+					when(_self.storeUpdates(repo, obj.id,fileBuffers), function(res){
+						when(_self.get(obj.id),function(obj){
+							when(_self.updateIndex(obj), function(){	
+								console.log("PUT res: ", obj);
+								return obj;
 							});
 						});
 					});
-				}else{
-					def.resolve(repo);
-				}
+				});
 			});
-			
 		});
-		return def.promise;
+
+		return putDef.promise;
 	},
-	storeCollectionMeta: function(path, obj) {
+
+	insertBuffersAsBlobs: function(repo, treeBuilder,fileBuffers){
+		var defs = fileBuffers.map(function(f){
+			var def = new defer();
+			if (f.buffer) {
+				repo.createBlobFromBuffer(f.buffer,function(blobErr,blob){
+					if (blobErr){
+						console.log("blobErr: ", blobErr);
+						return def.reject(blobErr);
+					}
+					//console.log("Inserting blob at ", f.filename);
+					treeBuilder.insert(f.filename,blob,0100644);
+					def.resolve(true);
+				});
+			}else{
+				console.log("No Buffer found for fileObject: ", f)
+				def.resolve(true);
+			}
+			return def.promise;	
+		});
+		return All(defs);
+	},
+
+	storeUpdates: function(repo, id, fileBuffers) {
 		var def = new defer();
-		console.log("Store Meta() path: ", path," obj:", obj );
-		def.resolve(obj);
+		var _self=this;
+		repo.getBranch("master", function(gitRefError, head) {
+		//	if (gitRefError) {
+		//		console.log("gitRefError: ", gitRefError);
+		//	}
+			var commitMsg = []	
+			var parents=[];	
+			var treeBuilder,writeRef;
+
+			//first commit
+			if (!head || gitRefError){
+				treeBuilder = repo.treeBuilder();
+				commitMsg.push("Initial Commit.");
+				writeRef="HEAD";
+			}else{
+				treeBuilder = new defer();
+				writeRef="HEAD";
+		//		console.log("Get Commit from HEAD");
+				repo.getCommit(head, function(getCommitError, parent) {
+					if (getCommitError) { return treeBuilder.reject(getCommitError); }
+					parents.push(parent);
+					parent.getTree(function(error,tree) {
+						treeBuilder.resolve(tree.builder());
+					});
+				});		
+			}
+
+			when(treeBuilder, function(treeBuilder){
+				fileBuffers.forEach(function(fb){
+					if (fb.filename=="_metadata.json") {
+						commitMsg.push("Updated Collection Metadata.\n")
+					}else{
+						if (treeBuilder.get(fb.filename)) {
+							commitMsg.push("Updated File: "+fb.filename+"\n");
+						}else{
+							commitMsg.push("Added New File: "+fb.filename+"\n");
+						}
+					}
+				});
+				when(_self.insertBuffersAsBlobs(repo,treeBuilder,fileBuffers),function(){
+					treeBuilder.write(function(treeWriteError,treeId){
+						if (treeWriteError) { throw treeWriteError; }
+						var author = git.Signature.create("system", "system@system", 123456789, 60);
+						var committer = git.Signature.create("system", "system@system", 987654321, 90);
+						repo.createCommit(writeRef, author, committer, commitMsg.join("\n"), treeId,parents, function(commitError, commitId) {
+							if(commitError) { return def.reject(commitError) }
+							console.log("New Commit on ", id, commitId.sha());
+							def.resolve(repo);
+						});
+					});
+				});
+			});
+		});
+
 		return def.promise;
 	},
 
-	getRepository: function(filepath) {
+	updateIndex: function(obj){
+		console.log("updateIndex: ", obj);
+		if (!obj || !obj.id) { return;}
+		var pos=-1;
+		console.log(this);
+
+		if (this._index[obj.id]) {
+			pos = this._index.indexOf(this._index[obj.id]);
+		}
+
+		if (pos>=0) {
+			//console.log("Already in index @", pos, obj.id);
+			this._index[pos]=obj;
+			this._index[obj.id]=obj;	
+		}else{
+			//console.log("Adding to index: ", obj.id);
+			this._index.push(obj);
+			this._index[obj.id]=obj;
+		}
+	},
+
+	createRepository: function(id) {
+		var filepath = Path.join(this.basePath, id.split("-").join("/"));
+		console.log("Initializing new repository for " + id + " at " + filepath);
 		var def = new defer();
-		var _self=this;
+		fs.mkdirs(filepath, function(mkdirErr){
+			if (mkdirErr) { return def.reject("Unable To Create Repository Folder: ", mkdirErr); }
+			git.Repo.init(filepath,true,function(err,repo){
+				if (err) { return def.reject(err); }
+				def.resolve(repo);
+			});
+		});
+		return def.promise;
+	},
+		
+	getRepository: function(id) {
+		var filepath = Path.join(this.basePath, id.split("-").join("/"));
+		var def = new defer();
+		//console.log("Lookup repo at ", filepath);
 		fs.exists(filepath, function(exists){
 			if (!exists) {
-				console.log("Creating New Repository: ", filepath);
-				when(_self.initializeRepository(filepath, {repoCreationDate: new Date().toISOString()}), function(repo){
-					def.resolve(repo);
-				});
-			}else {
-				console.log("Found Repository: ", filepath);
+				console.log("Repo directory doesn't exist: ", filepath);
+				return def.resolve();
+			}else{
+				//console.log("Found Repository: ", filepath);
 				git.Repo.open(filepath, function(err,repo){
+					if (err) { return def.reject(err); }
 					def.resolve(repo);
 				});
 			}
 		});
 
 		return def.promise;
-	},
-
-	writeFileToRepo: function(repo,fileobj){
-		var def = new defer()
-		if (fileobj && fileobj.tempPath) {
-			console.log("Copy from ", fileobj.tempPath, " to ", fileobj.filename);
-			fs.copy(fileobj.tempPath,Path.join(repo.workdir(),fileobj.filename),null, function(copyError){
-				if (copyError) { return def.reject(copyError); }
-				def.resolve(true);
-
-				// delete the temp file after copy is complete. 
-				fs.unlink(fileobj.tempPath, function(unlinkError){
-					if (unlinkError) { console.warn("Error Deleting Temporary Upload File: ", fileobj.tempPath); }
-				});
-			});
-		
-		}else if (fileobj && fileobj.type && fileobj.type=="text") {
-			var content = fileobj.content;
-//			if (typeof fileobj != "string"){
-//				content = JSON.stringify(content);
-//			}
-			var buf = new Buffer(content, 'ascii');
-			
-			/*
-			fs.writeFile(Path.join(repo.workdir(),fileobj.filename), content, function(writeError){
-				if (writeError) { return def.reject(writeError); }
-				def.resolve(true);
-			});
-			*/
-		}else{
-			def.reject(new Error("Binary Files Not Implemented"));
-		}
-		return def.promise;
-	},
-
-	writeFilesToRepo: function(repo, files) {
-		var _self=this;
-		return when(repo, function(repo) {
-			var defs = files.map(function(fileobj){
-				return _self.writeFileToRepo(repo,fileobj);
-			});
-			return All(defs);
-		});	
-	},
-
-	addFilesToIndex: function(index,files){
-		var defs = files.map(function(fileobj){
-			var def = new defer();
-			index.addByPath(fileobj.filename, function(addByPathError){
-				if (addByPathError) { def.reject(addByPathError);return; }
-				index.write(function(writeError){
-					if (writeError) {def.reject(writeError); return;}
-					def.resolve();
-				});
-			})
-			return def.promise;
-		});	
-
-		return All(defs);
-	},
-
-	commitFilesToRepo: function(repo, files, msg, author){
-		var _self = this;
-		return when(this.writeFilesToRepo(repo,files), function(){
-			//add the file to the index...
-			var def = new defer()
-			repo.openIndex(function(openIndexError, index) {
-				if (openIndexError) return def.reject(openIndexError);
-
-				index.read(function(readError) {
-					if (readError) return def.reject(readError);
-
-					when(_self.addFilesToIndex(index,files), function(err) {
-						index.writeTree(function(writeTreeError, oid) {
-							if (writeTreeError) return def.reject(writeTreeError);
-
-							//get HEAD
-							git.Reference.oidForName(repo, 'HEAD', function(oidForName, head) {
-								console.log("oidForName: ", oidForName);
-								////if (oidForName) return def.reject(oidForName);
-								//get latest commit (will be the parent commit)
-								repo.getCommit(head, function(getCommitError, parent) {
-									var authorSig = git.Signature.create(author.name,author.email, parseInt((new Date().valueOf())/1000),0);
-									var committerSig = git.Signature.create(author.name,author.email, parseInt((new Date().valueOf())/1000),0);
-									repo.createCommit('HEAD', authorSig, committerSig, msg, oid, parent?[parent]:[], function(error, commitId) {
-//										if (error) { return def.reject(error); }	
-										console.log("New Commit:", commitId.sha());
-										def.resolve(commitId.sha());
-									});
-								});
-							
-							});
-						});
-					});
-				});
-			});
-			return def.promise;
-		});
 	},
 
 	"delete": function(id, opts){
