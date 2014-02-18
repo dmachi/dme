@@ -13,13 +13,15 @@ var Model = exports.Model= declare([EventEmitter],{
 	},
 
 	updateObject: function(object,updated){
+		console.log("Update Obj");
 		var _self=this;
 		var out = {};
 		if (object.id) { out.id = object.id }
 		try {
-		if (!this.schema || this.schema.properties) { throw Error("Missing Schema Properties"); }
+		if (!this.schema || !this.schema.properties) { throw Error("Missing Schema Properties"); }
 		Object.keys(this.schema.properties).forEach(function(prop){
-			var propDef = _self.schema[prop];
+			var propDef = _self.schema.properties[prop];
+			console.log("prop: ", prop, "propDef: ", propDef);
 			if (!prop || (prop=="id") || (typeof propDef=="function")) { return; }
 
 			if ((propDef.type=="readonly")&&(typeof object[prop]!="undefined")){
