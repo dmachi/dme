@@ -33,6 +33,9 @@
     "git-http-backend": "*",
     "rql": "*",
     "glob":"*",
-    "randomstring":"*"
+    "randomstring":"*",
+    "dojo-declare":"*",
+    "promised-io":"*",
+    "mongodb":"*"
   }
 }
