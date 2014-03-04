@@ -29,6 +29,13 @@ var DME = exports.DataModelEngine = function(dataModel,opts) {
 
 util.inherits(DME, EventEmitter);
 
+DME.prototype.getModelExecutor= function(method, modelId,type){
+	console.log("getModelExecutor: ", method, modelId);
+//	console.log("this._Facets[modelId]", this._Facets[modelId][type]);
+//	console.log("this._Models[modelId]", this._Models[modelId]);
+	var fn = getExecutor(method, this._Facets[modelId][type],this._Models[modelId]);
+	return fn;
+}
 
 DME.prototype.init=function(skipRegisterRoute){
 	console.log("DME Init() ", arguments);
@@ -42,6 +49,7 @@ DME.prototype.init=function(skipRegisterRoute){
 		console.log("DB INIT Options: ", M.collectionId?M.collectionId:prop, opts);
 		this._Stores[prop] = M.Store = new M.store(M.collectionId || prop,opts);
 		this._Models[prop] = M.Model =  new M.model(M.Store, this.opts);
+		this._Models[prop].engine = _self;
 	
 		if (M.notifications){
 			this._Models[prop].on('message', function(msg){
@@ -93,9 +101,17 @@ getExecutor = function(method,facet,model){
 	//console.log("Method: ", method, "Facet: ", facet, "Model: ", model);
 	if (facet.rpc && (facet.rpcMethods=="*" || (facet.rpcMethods.indexOf(method)>=0))){
 		if (facet[method] && (typeof facet[method]=="function")){
-			return facet[method];
+			return function() {
+				console.log("queryFn args: ", arguments);
+				return facet[method].apply(facet,arguments);
+			}
+			//return facet[method];
 		}else if (facet[method] && (facet[method]===true) && model[method] ){
-			return model[method]	
+			return function() {
+				console.log("queryFn args: ", arguments);
+				return model[method].apply(model,arguments);
+			}
+			//return model[method]	
 		}
 		console.log("Invalid RPC Method:", method);
 		return false;	
@@ -143,9 +159,10 @@ DME.prototype.handleMessage=function(msg,socket){
 	if (executor){
 		when(executor.apply(this, [params,routeOpts]), function(results){
 			//console.log("Executor Results: ",results);
-			if (facet.excludedProperties) {
-				results = _self.filterObjectProperties(results, facet.excludedProperties);
-			}
+			//if (facet.excludedProperties) {
+			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
+			//}
+			console.log("Send Executor Results: ", results);
 			_self.send("DataModel/" + modelId +  "/" + method + "/result",results,routeOpts);
 		}, function(error){
 			console.log("Executor Error Handler", error);
@@ -185,7 +202,13 @@ DME.prototype.getMiddleware=function(opts) {
 			}
 			next();
 		},
-
+		function(req, res, next) { 
+                        console.log('-- session in dme engine.js--'); 
+                        console.dir((req && req.session)?req.session:"\tNo Session");
+			console.log("req: ", req);
+                        console.log('-------------');
+                        next()
+                },
 		//check auth and choose the correct facet for this request
 		function(req,res,next){
 
@@ -221,12 +244,16 @@ DME.prototype.getMiddleware=function(opts) {
 		function(req,res,next){
 			//console.log("Check Headers");
 			req.templateId = req.model;
+
 			if (req.storeMethod == "query") {
 				req.templateId=req.model + "-list";
 			}
+
 			if (req.headers && req.headers.templateStyle){
 				req.templateId = req.templateId + "-" + req.headers.templateStyle;
 			}
+		
+
 			next();
 		},
 
@@ -242,11 +269,11 @@ DME.prototype.getMiddleware=function(opts) {
 			var q= req&&req._parsedUrl&&req._parsedUrl.query?unescape(req._parsedUrl.query):"";
 //			var q = req._parsedUrl.query;
 			req.originalQuery = req._parsedUrl.query;	
-//			console.log("Process Range Header: ", req.headers);	
+			console.log("Process Range Header: ", req.headers);	
 
 			if (req.headers.range) {
 				var range = req.headers.range.match(/^items=(\d+)-(\d+)?$/);
-			//	console.log("range: ", range);
+				console.log("range: ", range);
 				if (range) {
 					start = range[1] || 0;
 					end = range[2];
@@ -260,30 +287,39 @@ DME.prototype.getMiddleware=function(opts) {
 					}	
 	
 					// compose the limit op
-					if (end >= start) {
+					if (end > start) {
 						requestedLimit = Math.min(limit, end  - start);
 						// trigger totalCount evaluation
 						maxCount = Infinity;
+					}else if (end==start){
+						requestedLimit=1
 					}
 				}
 			}
-
+			console.log("requestedLimit: ", requestedLimit, "start: ", start, "maxCount", maxCount);		
+			if (requestedLimit) {
+				req.limit = {start: start, limit: requestedLimit}
+				limiter= "&limit(" + requestedLimit+ "," + start + "," + maxCount + ")";
+				q += limiter;
+			}else{
+				req.limit={start: start||0, limit: Infinity}
+			}
+			console.log("Pre-Parse: ", q);
 			var parsed = parser.parse(q);
-			if (!requestedLimit) {
-				requestedLimit = parsed&&parsed.cache&& parsed.cache.limit && parsed.cache.limit[0]?parsed.cache.limit[0]:0;
+/*
+			if (!requestedLimit && parsed && parsed.cache && parsed.cache.limit) {
+				if (limit!=Infinity) {
+					requestedLimit = parsed.cache.limit[0]||limit;
+					limiter= "&limit(" + requestedLimit+ "," + start + "," + maxCount + ")";
+					req.limit = {start: start, limit: requestedLimit}
+					q += limiter;
+				}
+				parsed = parser.parse(q);
 			}
-			if (!requestedLimit || requestedLimit > limit) {
-				// always honor existing finite model.maxLimit
-				if (limit != Infinity) {
-					limiter= "&limit(" + limit + "," + start + "," + maxCount + ")";
-				}//else{
-				//	limiter = "" //&limit(" + maxCount + ",0," + maxCount + ")";
-				//}
-				q = (q||"") + (limiter || "");
-			}
+*/
 
-			req.query =  parser.parse(q);
-//			req.originalQuery = q;
+			req.query = parsed;
+			console.log("re.query: ", req.query);
 //			console.log("query: ", q);
 			next();
 		},
@@ -292,10 +328,13 @@ DME.prototype.getMiddleware=function(opts) {
 			var httpMethod = req.method;
 			var storeMethod = req.storeMethod;
 		
-			//console.log("checking storeMethod: ", storeMethod);	
+			console.log("checking storeMethod: ", storeMethod);	
+			console.log("req.params: ", req.params, "req.query: ", req.query);
 			req.storeParams = req.params.id || req.params[0];
 			if (storeMethod=="post" || storeMethod=="put"){
 				req.storeParams = req.body || {};
+			}else if (storeMethod=="query") {
+				req.storeParams = req.query;
 			}
 			next();
 		},
@@ -304,15 +343,17 @@ DME.prototype.getMiddleware=function(opts) {
 			var httpMethod = req.method;
 			var storeMethod = req.storeMethod;
 
-			//console.log("Endpoint: ",req.model);
+			console.log("Endpoint: ",req.model);
 			if (!req.facet[storeMethod] && !((req.facet.rpcMethods=="*")||(req.facet.rpcMethods&&(req.facet.rpcMethods.indexOf(storeMethod)>=0))) ){
-				//console.log("req.facet[storeMethod]: ", req.facet[storeMethod], req.model[storeMethod], req.facet);
+				console.log("req.facet[storeMethod]: ", req.facet[storeMethod], req.model[storeMethod], req.facet);
 				return next("route");
 			}
 
+			console.log('req.facet: ', req.facet);
 			if (req.facet[storeMethod]===true){
+				console.log("Found StoreMethod");
 				if (storeMethod=="rpc") {
-					//console.log("Handle RPC");
+					console.log("Handle RPC");
 					var params = req.body;
 					//console.log("Requested RPC Params: ", params);
 					//console.log("Allowed RPC Methods: ", req.facet.rpcMethods);	
@@ -324,7 +365,6 @@ DME.prototype.getMiddleware=function(opts) {
 								//console.log("Facet: ", req.facet[params.method]);		
 								//console.log("Model: ", req.dataModel);		
 								var e = req.facet[params.method]?req.facet:req.dataModel;
-
 
 								if ((e===req.facet)&&(req.facet[params.method]===true)){
 									e = req.dataModel;
@@ -349,31 +389,36 @@ DME.prototype.getMiddleware=function(opts) {
 
 					res.results = fn(req.storeParams, {req: req, res:res});
 				}else{
-					//console.log("Default Handler: ", req.model, storeMethod);
+					console.log("Default Handler: ", req.model, storeMethod);
 					if (req.dataModel[storeMethod]){
+
 						if (storeMethod=="query") { 
 							p = req.query 
 						} else {
 							var p = req.params.id || req.params[0];
 						}
+						console.log("p: ", p, req.query);
 						res.results = req.dataModel[storeMethod](p, {req: req, res: res});
 					}
 				}
 			}else if (typeof req.facet[storeMethod]== "function"){
-				//console.log("storeMethod: ", storeMethod);
-				//console.log("Custom Facet Handler");
+				console.log("storeMethod: ", storeMethod);
+				console.log("Custom Facet Handler");
 				//console.log("req.body: ", req.body);
-				//console.log("req.params: ", req.storeParams);
-				
+				console.log("req.params-b: ", req.storeParams);
+				console.log("Store Method Func: ", req.facet[storeMethod]);
 				res.results = req.facet[storeMethod](req.storeParams, {req: req, res: res});
 			}
 			
-			//console.log('res.results_1: ', res.results);
 			when(res.results, function(results){
-				//console.log('res.results_2: ', results);
+				console.log('res.results_2 length: ', results);
 				if (results && results.stream) {
 					return;
 				}	
+				res.results=results;
+				next();
+			}, function(err){
+				throw new Error(err);
 				next();
 			});
 	
@@ -381,10 +426,10 @@ DME.prototype.getMiddleware=function(opts) {
 
 		function(req, res, next){
 			 when(res.results, function(results){
-				//console.log("rpc check", results); 
+				console.log("rpc check", results); 
 				//if we're processing an rpc call, just return results
 				//the rpc method is responsible for filtering any resultant properties
-			//	console.log("res.results processing: ", results, arguments);
+//				console.log("res.results processing: ", results, arguments);
 				if (results && results.stream) { console.log("detected stream"); return; }
 				//console.log("results: ", results);
 				if (!results && (results!==false)){
@@ -414,7 +459,7 @@ DME.prototype.getMiddleware=function(opts) {
 					return r;
 				}
 
-
+/*
 				if (req.facet.excludedProperties){
 					if (results.forEach){
 						res.results = results.map(function(o){
@@ -424,9 +469,10 @@ DME.prototype.getMiddleware=function(opts) {
 						res.results = _self.filterObjectProperties(results, req.facet.excludedProperties);
 					}
 				}
-
+*/
 			//	console.log("Filter Object Properties: ", results);
 			//	res.results = _self.filterObjectProperties(results, req.facet.excludedProperties);
+				res.results = results;
 				next();
 				
 			}, function(e){
@@ -436,9 +482,22 @@ DME.prototype.getMiddleware=function(opts) {
 			})
 		},
 
+
 		function(req,res,next){
-//			console.log("res.results: ", res.results);
+			console.log("res.results: ", res.results);
 			when(res.results, function(results){
+				if (res.totalCount && res) {
+					console.log("Got Total Count: ", res.totalCount);
+					res.set("content-range", "items=" + ((req && req.limit)?req.limit.start:0) + "-" + (((req&&req.limit)?req.limit.start:0)+results.length) + "/" + (res.totalCount));	
+					console.log("After Set Content Range: ", res.headers);
+				}
+				next();
+			});	
+		}, 
+		function(req,res,next){
+			console.log("res.results: ", res.results);
+			when(res.results, function(results){
+				console.log("RES.RESULTS FINAL MIDDLEWARE: ", res.results);
 				if (results && results.file){
 					console.log("DOWNLOAD FILE: ", results.file);
 					res.sendfile(results.file,  function(err){
@@ -464,7 +523,9 @@ DME.prototype.getMiddleware=function(opts) {
 				_self.mediaHandlers.map(function(h){
 					
 					mediaHandlers[h.mimeType] = function(obj){
-						//console.log("Serialize type: ", h.mimeType);
+						console.log("Serialize type: ", h.mimeType);
+//						console.log("Serializing: ", results);
+						console.log("results.totalCount:", res.totalCount, " results len: ", results.length);
 						var out = h.serialize(results,{req: req, res: res})
 						when(out, function(out){
 //							console.log("out: ", out);
@@ -479,8 +540,8 @@ DME.prototype.getMiddleware=function(opts) {
 				}		
 			}, function(err){
 				console.log("Error Handling Results: ", err);
-			//	res.render("error", {results: res.results, error: err});
-			//	next();
+		//		res.render("error", {results: res.results, error: err});
+		//		next();
 				next(err);	
 
 			})

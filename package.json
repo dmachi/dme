@@ -36,6 +36,8 @@
     "randomstring":"*",
     "dojo-declare":"*",
     "promised-io":"*",
-    "mongodb":"*"
+    "mongodb":"*",
+    "node-uuid":"*",
+    "mime":"*"
   }
 }

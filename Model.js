@@ -5,6 +5,7 @@ var util=require("util");
 var declare = require("dojo-declare/declare");
 
 var Model = exports.Model= declare([EventEmitter],{
+	store: null,
 	constructor: function(store,opts){
 		var _self=this;
 		this.store = store;

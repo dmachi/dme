@@ -90,6 +90,11 @@ var handlers = [
 		options.qf.push(walkQuery(query.args[0],options));
 	}],
 
+	["fq", function(query, options){
+		if (!options.fq){options.fq=[]}
+		options.fq.push(walkQuery(query.args[0],options));
+	}],
+
 	["not", function(query, options){
 		return "NOT " + walkQuery(query.args[0],options);
 	}],
@@ -98,8 +103,6 @@ var handlers = [
 
 	["in", function(query, options){
 		//console.log("IN ", query.args[0], query.args[1]);
-		if(query.args[1]=="cursor") {return; }
-		console.log("in() query: ", query);
 		return "(" + query.args[0] + ":(" + query.args[1].join(" OR ") + "))";
 	}],
 
@@ -173,24 +176,6 @@ var handlers = [
 		if (!existingFacetProps('limit')){
 			options.facets.push({field: "limit", value: 500});
 		}
-		/*
-		query.args[0].forEach(function(f){
-			options.facets.push({field:f});
-		});
-
-		if (query.args[1]){
-			var dir =  (query.args[1].charAt(0)=="+")?"ASC":"DESC";
-			options.facets.push({sort: query.args[1].substr(1)+" " + dir});
-		};
-
-		if (query.args.length>2){
-			query.args.slice(2).forEach(function(p){
-				var obj = {};
-				obj[p[0]]=p[1];
-				options.facets.push(obj);
-			});
-		}
-		*/
 	}],
 
 	["cursor", function(query,options){
@@ -232,7 +217,7 @@ var handlers = [
 		return item;
 	},"post"]
 ]
-
+/*
 Query.prototype.normalize = function(options){
 	options = options || {};
 	options.primaryKey = options.primaryKey || 'id';
@@ -301,14 +286,16 @@ Query.prototype.normalize = function(options){
 		// cache search conditions
 		//if (options.known[func])
 		// map some functions
-		/*if (options.map[func]) {
-			func = options.map[func];
-		}*/
+		//if (options.map[func]) {
+		//	func = options.map[func];
+		//}
 	}
 	this.walk(normal);
 	return result;
 };
+*/
 
+/*
 Query.prototype.walk = function(fn, options){
 	options = options || {};
 	var depth; 
@@ -337,6 +324,7 @@ Query.prototype.walk = function(fn, options){
 	}
 	walk.call(this, this.name, this.args,depth);
 };
+*/
 
 Query.prototype.toSolr = function(SolrQuery,options){
 	options = options || {};
@@ -350,23 +338,26 @@ Query.prototype.toSolr = function(SolrQuery,options){
 		known: known
 	});
 
-	options.fullQuery = options.fullQuery;
+	console.log("query: ", query);
 
-	console.log("original: ", query, query.original);
 	var processedQ = walkQuery(query.original, options);
+
 	if (!processedQ||processedQ=="()"){ processedQ = "*:*" };
 	console.log("processedQ: ", processedQ);
+
 	if (options.qf){
 		processedQ += "&qf="+options.qf;
 	}
 	var q = SolrQuery.q(processedQ||"*:*") ;
 
-	if (options.qf){
-		options.qf.forEach(function(qf){
-			q.qf(qf);
+	if (options.fq){
+		options.fq.forEach(function(fq){
+			q.set("fq=" + fq);
 		});
 	}	
+
 	
+
 	console.log("SolrQuery: ", q);
 	
 	if (query && query.sortObj){
@@ -378,8 +369,8 @@ Query.prototype.toSolr = function(SolrQuery,options){
 	}
 	
 	console.log("Query Limit: ", query.limit);
-	if (query && typeof query.limit != 'undefined' && query.limit!="Infinity"){
-		if (typeof query.limit!='object'){
+	if (query && typeof query.limit != 'undefined' && query.limit!=Infinity){
+		if (typeof query.limit=='number'){
 			q.rows(query.limit);
 		}else{
 			q.rows(query.limit[0]);
@@ -415,7 +406,7 @@ var walkQuery=function(query,options){
 	var handler;
 		
 	if (options.handlers.some(function(h){
-		if (h[0]==query.name){
+		if (h&&h[0]==query.name){
 			//console.log("found Handler: ", h[0]);
 			handler=h;
 			return true;
@@ -454,184 +445,136 @@ var Store = exports.Store = declare([StoreBase], {
 
 	},
 	query: function(query, opts){
-		var subqdefs=[]
-//		console.log("query opts: ", opts);
 //		console.log("Store Options: ", this.options);
 		var _self=this;
-		var dataModels=null;
-
-		if (opts && opts.dataModel) {
-			dataModels = opts.dataModel;
-		}else if (this.options && this.options.getDataModel && opts && opts.request){
-			dataModels = this.options.getDataModel(opts.request)
-		}	
-//		var dataModels = (opts.dataModel||this.options.getDataModel)?opts.dataModel || this.options.getDataModel(opts.request):null;
-		if (opts && opts.req && opts.req.query) { q = opts.req.query; } else { q = Query(query); }
-
+		var def = new defer();
+		console.log("SOLR QUERY: ", query);
+		q = Query(query);
+		console.log("PARSED SOLR QUERY: ", q);
 		var rqlOptions = {
 			handlers: this._handlers,
 			post: []
 		}
 
-		console.log("beforeToSolr Q: ", q);
-
 		var squery = q.toSolr(_self.client.createQuery(), rqlOptions);
 
+		console.log("SOLR QUERY: ",squery);
+		_self.client.search(squery, function(err, obj){
+			if (err){
+				console.log("SOLR Error Response: ", err);
+				return def.reject(err);
+			}else{
+				//console.log("obj: ", obj);
+				if (obj && obj.response && obj.response.docs  && obj.response.docs instanceof Array ){// && obj.response && obj.response.docs){
 
-		console.log("SOLR Query: ", squery);
-		if (rqlOptions.subQueries){
-			//console.log("SubQueries: ", rqlOptions.subQueries);
-			var subqdef = new Deferred();
-			subqdefs.push(subqdef.promise);
-			subqdef.resolve([]);
-		}
+				var qp = q.normalize();
+				var distinctMap={};
+				var responseItems = obj.response.docs;
 
-		var mainQueryDef = when(All(subqdefs), function(subqdefs){
-			var def = new Deferred();	
-			_self.client.search(squery, function(err, obj){
-				if (err){
-					def.reject(err);
-				}else{
-					//console.log("obj: ", obj);
-					if (obj && obj.response && obj.response.docs  && obj.response.docs instanceof Array ){// && obj.response && obj.response.docs){
-
-						var qp = q.normalize();
-						var distinctMap={};
-						var responseItems = obj.response.docs;
-
-						if (rqlOptions.facetValues && rqlOptions.facetValues.length>0){
-//							console.log("Retrieving Facet Values: ", rqlOptions.facetValues);
-							if (obj.facet_counts){
-								var ff = obj.facet_counts.facet_fields;
-								if (!ff){ throw Error("Facet Fields Not Found in results"); }
-								var fo= [] 
-								rqlOptions.facetValues.forEach(function(fv){
-								//	console.log("fv: ", fv);
-//									console.log("ff[fv]: ", ff[fv]);	
-									if (ff[fv]){
-										var keys = ff[fv].forEach(function(obj,index){
-//											console.log("Filtering: ", obj, x, ((x%2)==0));	
-											if ((index % 2) == 0){
-												fo.push({
-													key: obj,
-													count: ff[fv][index+1]
-												});
-											}
-										});
-									//	console.log("keys: ", keys);
-										fo = fo.concat(keys);
-									}
-								});
-
-//								def.resolve(fo);
-								responseItems = fo;
-//								console.log("ResponseItems:", responseItems, fo);
-//								def.resolve(fo);
-			
-							}else{
-								throw new Error ("Facet Field Values could not be retrieved");
-							}
-						}
-
-						var items = responseItems.map(function(item){
-							//console.log("item: ", item);
-							if(item && typeof item === "object"){
-								var object = {};
-								if (rqlOptions.distinct){
-									if (rqlOptions.distinct.some(function(field){
-										if (!(distinctMap[field])){
-											distinctMap[field]={};
+				if (rqlOptions.facetValues && rqlOptions.facetValues.length>0){
+//					console.log("Retrieving Facet Values: ", rqlOptions.facetValues);
+					if (obj.facet_counts){
+						var ff = obj.facet_counts.facet_fields;
+						if (!ff){ throw Error("Facet Fields Not Found in results"); }
+							var fo= [] 
+							rqlOptions.facetValues.forEach(function(fv){
+							//	console.log("fv: ", fv);
+//								console.log("ff[fv]: ", ff[fv]);	
+								if (ff[fv]){
+									var keys = ff[fv].forEach(function(obj,index){
+//										console.log("Filtering: ", obj, x, ((x%2)==0));	
+										if ((index % 2) == 0){
+											fo.push({
+												key: obj,
+												count: ff[fv][index+1]
+											});
 										}
-										if(distinctMap[field][item[field]]){	
-											return true;	
-										}
-
-										distinctMap[field][item[field]]=true;	
-										return false;
-									})){
-										return null;
-									}
-								}
-								if (rqlOptions.values){
-									if(typeof rqlOptions.values=='string'){
-										object = item[rqlOptions.values];
-									}else if(rqlOptions.values.length==1){
-										object = item[rqlOptions.values[0]];
-									}else{
-										object = rqlOptions.values.map(function(v){
-											return item[v];
-										});
-									}
-										
-								}else if (qp && qp.select && qp.select.length>0){
-									qp.select.forEach(function(prop){
-										object[prop]=(typeof item[prop]!='undefined')?item[prop]:undefined;
 									});
-								}else{
+								//	console.log("keys: ", keys);
+									fo = fo.concat(keys);
+								}
+							});
 
-									for(var i in item){
-										if(item.hasOwnProperty(i)){
-											object[i] = item[i];
-										}
+//							def.resolve(fo);
+							responseItems = fo;
+//							console.log("ResponseItems:", responseItems, fo);
+//							def.resolve(fo);
+		
+						}else{
+							throw new Error ("Facet Field Values could not be retrieved");
+						}
+					}
+
+					var items = responseItems.map(function(item){
+						//console.log("item: ", item);
+						if(item && typeof item === "object"){
+							var object = {};
+							if (rqlOptions.distinct){
+								if (rqlOptions.distinct.some(function(field){
+									if (!(distinctMap[field])){
+										distinctMap[field]={};
 									}
-	
+									if(distinctMap[field][item[field]]){	
+										return true;	
+									}
+
+									distinctMap[field][item[field]]=true;	
+									return false;
+								})){
+									return null;
+								}
+							}
+							if (rqlOptions.values){
+								if(typeof rqlOptions.values=='string'){
+									object = item[rqlOptions.values];
+								}else if(rqlOptions.values.length==1){
+									object = item[rqlOptions.values[0]];
+								}else{
+									object = rqlOptions.values.map(function(v){
+										return item[v];
+									});
+								}
+									
+							}else if (qp && qp.select && qp.select.length>0){
+								qp.select.forEach(function(prop){
+									object[prop]=(typeof item[prop]!='undefined')?item[prop]:undefined;
+								});
+							}else{
+
+								for(var i in item){
+									if(item.hasOwnProperty(i)){
+										object[i] = item[i];
+									}
 								}
 
-								rqlOptions.post.forEach(function(h){
-									object = h[1](object);
-								});	
-							}
-							return object;
-						}).filter(function(o){return !!o});
-						
-						if (obj.facet_counts){
-							var facets = obj.facet_counts;
-
-							if (!items || items.length<1){ 
-								
-								return def.resolve({totalRows: obj.response.numFound, facets: facets});
 							}
 
-							return def.resolve({totalRows: obj.response.numFound, items: items, facets: facets});
+							rqlOptions.post.forEach(function(h){
+								object = h[1](object);
+							});	
+						}
+						return object;
+					}).filter(function(o){return !!o});
+					
+					if (obj.facet_counts){
+						var facets = obj.facet_counts;
+
+						if (!items || items.length<1){ 
+							
+							return def.resolve({totalRows: obj.response.numFound, facets: facets});
 						}
 
-						def.resolve(items);
-						
+						return def.resolve({totalRows: obj.response.numFound, items: items, facets: facets});
 					}
+					if (opts && opts.res) {
+						opts.res.totalCount = obj.response.numFound;
+						console.log("opts.res: ", opts.res.totalCount);
+					}
+					def.resolve(items);
 				}
-			});
-			return def.promise;
+			}
 		});
-
-		if(rqlOptions.queries && rqlOptions.queries.length>0){
-			//console.log("Setup post queries: ", rqlOptions.queries);
-			rqlOptions.queries=rqlOptions.queries.map(function(rq){
-				//console.log("Queries: ", rqlOptions.queries);
-				return function(value){
-					//console.log("value: ", value);
-					var query;
-					if (typeof rq[1]=='function'){
-						//console.log("execute valueMapper func", rq[1]);
-						query = rq[1](value);
-						//console.log("replaced q: ", query);
-					}else{
-						//console.log("replacing 'cursor' with ", rq[1]);
-						query = rq[1].replace(/cursor/g,value);
-					}
-//					console.log("query: ", query);
-					return dataModels[rq[0]].query(query,{dataModel:dataModels});
-				}
-			});
-
-//			console.log("mapped queries; ", rqlOptions.queries);
-			return when(mainQueryDef, function(values){
-//				console.log("values: ", values);
-//				console.log("Run Sequence ", rqlOptions.queries,values);
-				return Sequence(rqlOptions.queries,values);
-			});
-		}else{
-			return mainQueryDef;
-		}
+		return def.promise;
 	},
 
 	get: function(id, opts){

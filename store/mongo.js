@@ -75,6 +75,7 @@ var Store = exports.Store=declare([StoreBase], {
 			query = parser.parse(query);	
 		}
 
+		console.log("parsed query: ", query);
 	
 		function walk(name, terms) {
 			// valid funcs
@@ -199,7 +200,8 @@ var Store = exports.Store=declare([StoreBase], {
 	},
 	query: function(query, opts){
 		var _self=this;
-		//console.log("query: ", query);
+	
+		console.log("query: ", (typeof query=='string')?("String Query: "+query):"Pre-Parsed Query");
 		var x = this.parseQuery(query);
 		var deferred = defer();
 		var meta = x[0], search = x[1];
@@ -213,7 +215,7 @@ var Store = exports.Store=declare([StoreBase], {
 			return results;
 		}
 
-		//console.log("Meta: ", meta);
+		console.log("Meta: ", meta);
 		//console.log("Search: ", search);
 		// request full recordset length
 		//dir('RANGE', options, directives.limit);
