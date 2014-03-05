@@ -342,7 +342,7 @@ Query.prototype.toSolr = function(SolrQuery,options){
 
 	var processedQ = walkQuery(query.original, options);
 
-	if (!processedQ||processedQ=="()"){ processedQ = "*:*" };
+	if (!processedQ||processedQ=="()"||processedQ=="(())"){ processedQ = "*:*" };
 	console.log("processedQ: ", processedQ);
 
 	if (options.qf){
@@ -353,6 +353,7 @@ Query.prototype.toSolr = function(SolrQuery,options){
 	if (options.fq){
 		options.fq.forEach(function(fq){
 			q.set("fq=" + fq);
+			//q.fq(fq);
 		});
 	}	
 
@@ -368,15 +369,16 @@ Query.prototype.toSolr = function(SolrQuery,options){
 		q.sort(so);
 	}
 	
-	console.log("Query Limit: ", query.limit);
-	if (query && typeof query.limit != 'undefined' && query.limit!=Infinity){
+	console.log("Query Limit: ", query.limit, "Infinite: "< query.limit!==Infinity);
+
+	if (query && typeof query.limit != 'undefined' && query.limit!==Infinity){
 		if (typeof query.limit=='number'){
 			q.rows(query.limit);
 		}else{
 			q.rows(query.limit[0]);
 		}
 	}else{
-		q.rows(1000);
+		q.rows(99999999);
 	}
 
 	if (query && (query.skip||(query.limit && query.limit[1]))){

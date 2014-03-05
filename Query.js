@@ -70,9 +70,15 @@ var LazyWalk = exports.LazyWalk = function(DME, term,opts) {
 	throw Error("Invalid Term - " + JSON.stringify(term));
 }
 
+var queryCache={};
+
 function runQuery(queryFn, query,opts){
 	console.log("Launch Query : ",query);
+	if (queryCache[query]) {
+		return queryCache[query];
+	}
 	return when(queryFn(query,opts),function(qres){
+		queryCache[query]=qres;
 		console.log("qres len: ", qres.length);
 		return qres;
 	});
@@ -133,6 +139,8 @@ var Walk = exports.Walk = function(term,expansions) {
 	}
 	throw Error("Invalid Term - " + JSON.stringify(term));
 }
+
+
 
 exports.ExpandQuery = function(query, expansions){
 	if (!expansion) {throw new Error("No Expansions Defined"); }

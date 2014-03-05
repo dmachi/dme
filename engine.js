@@ -30,7 +30,7 @@ var DME = exports.DataModelEngine = function(dataModel,opts) {
 util.inherits(DME, EventEmitter);
 
 DME.prototype.getModelExecutor= function(method, modelId,type){
-	console.log("getModelExecutor: ", method, modelId);
+//	console.log("getModelExecutor: ", method, modelId);
 //	console.log("this._Facets[modelId]", this._Facets[modelId][type]);
 //	console.log("this._Models[modelId]", this._Models[modelId]);
 	var fn = getExecutor(method, this._Facets[modelId][type],this._Models[modelId]);
@@ -46,7 +46,7 @@ DME.prototype.init=function(skipRegisterRoute){
 		console.log("DatabaseOptions: ", _self.opts.database);
 		var auth = ((_self.opts.database && _self.opts.database[prop])?_self.opts.database[prop]:_self.opts.database[M.store.prototype.authConfigProperty])||{};
 		opts.auth = auth;
-		console.log("DB INIT Options: ", M.collectionId?M.collectionId:prop, opts);
+		//console.log("DB INIT Options: ", M.collectionId?M.collectionId:prop, opts);
 		this._Stores[prop] = M.Store = new M.store(M.collectionId || prop,opts);
 		this._Models[prop] = M.Model =  new M.model(M.Store, this.opts);
 		this._Models[prop].engine = _self;
@@ -102,13 +102,13 @@ getExecutor = function(method,facet,model){
 	if (facet.rpc && (facet.rpcMethods=="*" || (facet.rpcMethods.indexOf(method)>=0))){
 		if (facet[method] && (typeof facet[method]=="function")){
 			return function() {
-				console.log("queryFn args: ", arguments);
+				//console.log("queryFn args: ", arguments);
 				return facet[method].apply(facet,arguments);
 			}
 			//return facet[method];
 		}else if (facet[method] && (facet[method]===true) && model[method] ){
 			return function() {
-				console.log("queryFn args: ", arguments);
+				//console.log("queryFn args: ", arguments);
 				return model[method].apply(model,arguments);
 			}
 			//return model[method]	
@@ -162,7 +162,7 @@ DME.prototype.handleMessage=function(msg,socket){
 			//if (facet.excludedProperties) {
 			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
 			//}
-			console.log("Send Executor Results: ", results);
+			//console.log("Send Executor Results: ", results);
 			_self.send("DataModel/" + modelId +  "/" + method + "/result",results,routeOpts);
 		}, function(error){
 			console.log("Executor Error Handler", error);
@@ -205,7 +205,7 @@ DME.prototype.getMiddleware=function(opts) {
 		function(req, res, next) { 
                         console.log('-- session in dme engine.js--'); 
                         console.dir((req && req.session)?req.session:"\tNo Session");
-			console.log("req: ", req);
+			console.log("req: ", req.session);
                         console.log('-------------');
                         next()
                 },
@@ -411,7 +411,7 @@ DME.prototype.getMiddleware=function(opts) {
 			}
 			
 			when(res.results, function(results){
-				console.log('res.results_2 length: ', results);
+				console.log('res.results_2 length: ', results.length);
 				if (results && results.stream) {
 					return;
 				}	
@@ -426,7 +426,7 @@ DME.prototype.getMiddleware=function(opts) {
 
 		function(req, res, next){
 			 when(res.results, function(results){
-				console.log("rpc check", results); 
+//				console.log("rpc check", results); 
 				//if we're processing an rpc call, just return results
 				//the rpc method is responsible for filtering any resultant properties
 //				console.log("res.results processing: ", results, arguments);
@@ -484,7 +484,7 @@ DME.prototype.getMiddleware=function(opts) {
 
 
 		function(req,res,next){
-			console.log("res.results: ", res.results);
+//			console.log("res.results: ", res.results);
 			when(res.results, function(results){
 				if (res.totalCount && res) {
 					console.log("Got Total Count: ", res.totalCount);
@@ -495,9 +495,9 @@ DME.prototype.getMiddleware=function(opts) {
 			});	
 		}, 
 		function(req,res,next){
-			console.log("res.results: ", res.results);
+//			console.log("res.results: ", res.results);
 			when(res.results, function(results){
-				console.log("RES.RESULTS FINAL MIDDLEWARE: ", res.results);
+//				console.log("RES.RESULTS FINAL MIDDLEWARE: ", res.results);
 				if (results && results.file){
 					console.log("DOWNLOAD FILE: ", results.file);
 					res.sendfile(results.file,  function(err){
