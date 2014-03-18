@@ -411,7 +411,7 @@ DME.prototype.getMiddleware=function(opts) {
 			}
 			
 			when(res.results, function(results){
-				console.log('res.results_2 length: ', results.length);
+				//console.log('res.results_2 length: ', results.length);
 				if (results && results.stream) {
 					return;
 				}	
@@ -525,7 +525,7 @@ DME.prototype.getMiddleware=function(opts) {
 					mediaHandlers[h.mimeType] = function(obj){
 						console.log("Serialize type: ", h.mimeType);
 //						console.log("Serializing: ", results);
-						console.log("results.totalCount:", res.totalCount, " results len: ", results.length);
+						console.log("results.totalCount:", res.totalCount, " results len: ", results?results.length:"None");
 						var out = h.serialize(results,{req: req, res: res})
 						when(out, function(out){
 //							console.log("out: ", out);

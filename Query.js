@@ -6,7 +6,7 @@ var LazyArray = require("promised-io/lazy-array").LazyArray;
 var Query = require("rql/query").Query;
 
 var LazyWalk = exports.LazyWalk = function(DME, term,opts) {
-//	console.log("term: ", term);
+	console.log("LazyWalk term: ", term);
 //	console.log("stringified term: ", Query(term).toString());
 	var children;
 
@@ -14,7 +14,7 @@ var LazyWalk = exports.LazyWalk = function(DME, term,opts) {
 		return term;
 	}
 
-	if  (term != 'undefined' && (typeof term == "number")) {
+	if  ((term === 0) || (typeof term == "number")) {
 		return term.toString()
 	}
 
@@ -30,41 +30,58 @@ var LazyWalk = exports.LazyWalk = function(DME, term,opts) {
 				});
 
 				return when(All(term.args), function(args){
-					if (term.name=="and" && term.args.length==1){
-						return term.args[0];
-					}else if (term.name=="query") {
-						var modelId=args[0];
-						var q= Query(args[1]);
-						console.log("q: ", q);
-						var query = q.toString();
-						var type="public";
-						console.log("typeof query: ", typeof query);
-						console.log("Do Query ", modelId, query);
-						if (opts && opts.req &&  opts.req.user) { 
-							if (opts.req.user.isAdmin){
-								type="admin"
-							}else{
-								type="user"
-							}	
-						}
 
-						console.log(" get executor for  modelId: ", modelId, "type: ", type);
-						var queryFn= DME.getModelExecutor("query", modelId, type);
-						if (!queryFn) { throw new Error("Invalid Executor during LazyWalk for Query Resolver"); }
-						return when(runQuery(queryFn,query,opts), function(results){
-							console.log("runQuery results len: ",results.length);
-							return "(" + results.join(',') + ")";
-						}, function(err){
-							console.log("SubQuery Error: ", err);	
-						});	
-					}	
-					return term.name + "(" + args.join(",") + ")";
+					if (opts && opts.expansions && opts.expansions[term.name]) {
+						var expanded = opts.expansions[term.name].apply(this,term.args);	
+						console.log("expanded: ", expanded);
+						return when(ResolveQuery(DME,expanded,opts), function(expanded){
+							console.log("Expanded POST WALK: ", expanded);
+							return expanded;
+						});
+					}
+						if (term.name=="and" && term.args.length==1){
+							return term.args[0];
+						}else if (term.name=="query") {
+							var modelId=args[0];
+							var q= Query(args[1]);
+							console.log("q: ", q);
+							var query = q.toString();
+							var type="public";
+							console.log("typeof query: ", typeof query);
+							console.log("Do Query ", modelId, query);
+							if (opts && opts.req &&  opts.req.user) { 
+								if (opts.req.user.isAdmin){
+									type="admin"
+								}else{
+									type="user"
+								}	
+							}
+	
+							console.log(" get executor for  modelId: ", modelId, "type: ", type);
+							var queryFn= DME.getModelExecutor("query", modelId, type);
+							if (!queryFn) { throw new Error("Invalid Executor during LazyWalk for Query Resolver"); }
+							return when(runQuery(queryFn,query,opts), function(results){
+								console.log("runQuery results len: ",results?results.length:"None");
+								
+								if (results instanceof Array) {
+									return "(" + results.join(',') + ")";
+								}else{
+									return results;	
+								}
+							}, function(err){
+								console.log("SubQuery Error: ", err);	
+							});	
+						}	
+						console.log("Fall through: ", term, args);	
+						return term.name + "(" + args.join(",") + ")";
 				}, function(err){
-					def.reject("Error Lazily Expanding Query: ", err);
+					throw Error("Error Lazily Expanding Query: "+err);
 				});
 			}else{
 				return term.name+"()";
 			}
+		}else if (term.args){
+			return "(" + term.args.join(",") + ")"	
 		}
 	}
 	throw Error("Invalid Term - " + JSON.stringify(term));
@@ -84,7 +101,7 @@ function runQuery(queryFn, query,opts){
 	});
 }
 
-exports.ResolveQuery = function(DME,query,opts) {
+var ResolveQuery = exports.ResolveQuery = function(DME,query,opts) {
 	//normalize to object with RQL's parser
 	console.log("ResolveQuery: ", query);
 	
@@ -143,7 +160,7 @@ var Walk = exports.Walk = function(term,expansions) {
 
 
 exports.ExpandQuery = function(query, expansions){
-	if (!expansion) {throw new Error("No Expansions Defined"); }
+	expansions = expansions || {}
 	//normalize to object with RQL's parser
 	console.log("ResolveQuery: ", query);
 	
@@ -157,5 +174,4 @@ exports.ExpandQuery = function(query, expansions){
 		console.log("Expanded Query: ", finalQuery);
 		return finalQuery;
 	})
-
 }
