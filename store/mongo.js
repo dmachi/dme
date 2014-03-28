@@ -12,7 +12,7 @@ var declare = require("dojo-declare/declare");
 var Store = exports.Store=declare([StoreBase], {
 	init:  function(){
 		var _self=this;
-		console.log("this.options: ", this.options);
+		//console.log("this.options: ", this.options);
 		if (!this.options.auth.url){
 			throw new Error("No Connection URL Provided to Data Model");
 		}	
@@ -72,10 +72,12 @@ var Store = exports.Store=declare([StoreBase], {
 			if (query.charAt(0)=="?"){
 				query = query.substr(1);
 			}
+				
 			query = parser.parse(query);	
+			//console.log("Transformed: ", query);
 		}
 
-		console.log("parsed query: ", query);
+		//console.log("parsed query: ", query);
 	
 		function walk(name, terms) {
 			// valid funcs
@@ -134,12 +136,18 @@ var Store = exports.Store=declare([StoreBase], {
 					// TODO:
 				// nested terms? -> recurse
 				} else if (args[0] && typeof args[0] === 'object') {
-					if (valid_operators.indexOf(func) > -1)
-						search['$'+func] = walk(func, args);
+					if (valid_operators.indexOf(func) > -1){
+						if (func=="and"){
+							var walked = walk(func,args);
+							search['$'+func]=[walked];
+						}else{	
+							search['$'+func] = walk(func, args);
+						}
 						// N.B. here we encountered a custom function
 						// ...
 						// structured query syntax
 						// http://www.mongodb.org/display/DOCS/Advanced+Queries
+					}
 					} else {
 						//dir(['F:', func, args]);
 						// mongo specialty
@@ -172,7 +180,7 @@ var Store = exports.Store=declare([StoreBase], {
 						}
 						// $or requires an array of conditions
 						// N.B. $or is said available for mongodb >= 1.5.1
-						if (name == 'or') {
+						if (name == 'or'){
 							if (!(search instanceof Array))
 								search = [];
 							var x = {};
@@ -191,7 +199,9 @@ var Store = exports.Store=declare([StoreBase], {
 						}
 					}
 					// TODO: add support for query expressions as Javascript
+			
 			});
+
 			return search;
 		}
 	//	console.log('Q:',JSON.stringify(query));
@@ -201,7 +211,7 @@ var Store = exports.Store=declare([StoreBase], {
 	query: function(query, opts){
 		var _self=this;
 	
-		console.log("query: ", (typeof query=='string')?("String Query: "+query):"Pre-Parsed Query");
+		//console.log("query: ", (typeof query=='string')?("String Query: "+query):"Pre-Parsed Query");
 		var x = this.parseQuery(query);
 		var deferred = defer();
 		var meta = x[0], search = x[1];
@@ -215,7 +225,7 @@ var Store = exports.Store=declare([StoreBase], {
 			return results;
 		}
 
-		console.log("Meta: ", meta);
+		//console.log("Meta: ", meta);
 		//console.log("Search: ", search);
 		// request full recordset length
 		//dir('RANGE', options, directives.limit);
@@ -224,8 +234,11 @@ var Store = exports.Store=declare([StoreBase], {
 		// totalCount will be the minimum of unlimited query length and the limit itself
 		var totalCountPromise = new defer();
 
+
+
 		this.collection.count(search, function(err,totalCount){
-			//console.log("totalCount: ", totalCount);
+			if (err) { console.log("collection coutn error: ", err); totalCount=0; totalCountPromise.reject(err);return; }
+			//console.log("count() totalCount: ", totalCount);
 			totalCount -= meta.lastSkip;
 			if (totalCount < 0)
 				totalCount = 0;
@@ -234,11 +247,32 @@ var Store = exports.Store=declare([StoreBase], {
 			// N.B. just like in rql/js-array
 			totalCountPromise.resolve(Math.min(totalCount, typeof meta.totalCount === "number" ? meta.totalCount : Infinity));
 		})
-	
+
+		//console.log("do search: ", search, meta);	
 		this.collection.find(search, meta, function(err, cursor){
 			if (err) return deferred.reject(err);
+	//		console.log("cursor: ", cursor, cursor.count());
+			/*
+			if (!cursor || cursor.count<1){
+				def.resolve([]);
+			}
+			*/
+/*
+			if (!cursor){
+				var results = [];
+				results.count=0;
+				results.start=meta.skip;
+				results.end=meta.skip;
+				results.schema = _self.schema.id;
+				results.totalCount=0;
+
+				return deferred.resolve(results);
+			}
+*/
 			cursor.toArray(function(err, results){
-				if (err) return deferred.reject(err);
+	
+				if (err) {console.log("solr store find error: ", err); return deferred.reject(err);}
+				//console.log("solr store initial results: ", results);
 				// N.B. results here can be [{$err: 'err-message'}]
 				// the only way I see to distinguish from quite valid result [{_id:..., $err: ...}] is to check for absense of _id
 				if (results && results[0] && results[0].$err !== undefined && results[0]._id === undefined) {
@@ -279,7 +313,6 @@ var Store = exports.Store=declare([StoreBase], {
 
 		var def = new defer();
 
-		console.log("MONGO STORE post()", obj);
 		if (!obj.id || (obj.id && (options&&options.overwrite))) {
 			obj.id = obj.id || ((options&&options.id)?options.id:randomstring.generate(10)); 
 
@@ -292,7 +325,6 @@ var Store = exports.Store=declare([StoreBase], {
 			});	
 */
 			this.collection.findAndModify({id: obj.id},[],{$set: obj}, {safe:true,upsert:true,"new":true}, function(err,obj){
-				console.log("Saved: ", obj);
 				if (err) {def.reject(err); return;}
 				def.resolve(obj);	
 			});	
@@ -390,7 +422,7 @@ var Store = exports.Store=declare([StoreBase], {
 					}
 					break;
 				default:
-					if ((obj[prop]!==undefined) && (typeof obj[prop] != s.type)){
+					if ((obj[prop]!==undefined) && s.type &&  (typeof obj[prop] != s.type)){
 						throw Error("Invalid Type '" + s.type  + "' in property: " + prop + ". Should be: " + s.type + " but found " + typeof obj[prop]);
 					}
 			}
@@ -414,11 +446,12 @@ var Store = exports.Store=declare([StoreBase], {
 	},
 
 	'delete': function(id, options){
+		//console.log("SOLR DELETE OBJECT ID: ", id);
 		var def = new defer();
 		if (typeof id=="object"){
 			id=id.id;
 		}	
-		this.collection.delete({id:id},{safe:true}, function(err, count){
+		this.collection.remove({id:id},{safe:true}, function(err, count){
 			if (err) { def.reject(err); }
 			def.resolve(count);
 		});

@@ -49,12 +49,13 @@ var Model = exports.Model= declare([EventEmitter],{
 			}
 			
 			if (propDef.type && out[prop]) {
+				console.log("Check out[prop] as ", propDef.type, propDef, typeof out[prop]);
 				var udType = typeof out[prop];
+				
 				if (propDef.type=="date") {
 					if (!(out[prop].toISOString)){
 						throw new errors.NotAcceptable("'" + prop +"' expected to be of type " + propDef.type + ", but was " + udType); 
 					}
-
 				} else if (propDef.type != udType){
 					throw new errors.NotAcceptable("'" + prop +"' expected to be of type " + propDef.type + ", but was " + udType); 
 				}

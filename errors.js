@@ -25,11 +25,16 @@ var errorCodes = [
 
 errorCodes.forEach(function(c){
 	exports[c[2]||c[1]]=function(msg){
-		this.status=c[0];
-		this.name=c[1];
-		Error.call(this,msg);
-		Error.captureStackTrace(this, arguments.callee);
-		this.toString = function(){return msg + " (" + this.name + ") "}
+		//Error.call(this,msg);
+		var err = new Error(msg);
+
+		err.status=c[0];
+		err.name=c[1];
+//		Error.call(this,msg);
+//		Error.captureStackTrace(this, arguments.callee);
+//		this.toString = function(){return msg + " (" + this.name + ") "}
+//		err.captureStackTrace(this,arguments.callee);
+		return err;
 	}
 });
  
