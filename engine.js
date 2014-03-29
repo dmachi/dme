@@ -161,6 +161,7 @@ DME.prototype.handleMessage=function(msg,socket){
 			//if (facet.excludedProperties) {
 			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
 			//}
+			/*
 			if (results && results.count) {
 			//	if (results instanceof Array) {
 					res = {}
@@ -170,6 +171,7 @@ DME.prototype.handleMessage=function(msg,socket){
 					results=res;
 			//	}
 			}
+			*/
 			console.log("Send Executor Results: ", results);
 			_self.send("DataModel/" + modelId +  "/" + method + "/result",results,routeOpts);
 		}, function(error){
