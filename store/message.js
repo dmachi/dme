@@ -70,21 +70,17 @@ var Store = exports.Store= declare([StoreBase], {
 		console.log("MessageSotre this.id: ", this.id);
 		return when(this.send(this.id, "query", query), function(results){
 			console.log("Message Store Query Results: ", results);
-
-			/*
 			console.log("Query Results Len: ", results.length, "count: ", results.count);
 			console.log("Result Keys: ", Object.keys(results).join(","));
 			var end = results.start + results.count;
-	
-			if (opts && opts.req && opts.req.headers && opts.req.headers.range){ 
-				var end = results.start + results.count;
-				console.log("opts res: ", opts);
-				var r =  "items " + results.start + "-" + end + "/" + results.totalCount; 
-				console.log("R: ", r);
-				opts.res.set("content-range",r);
-			}
-			*/
-//			return results;
+				
+			//if (opts && opts.req && opts.req.headers && opts.req.headers.range){ 
+			console.log("opts res: ", opts);
+			var r =  "items " + results.start + "-" + end + "/" + results.totalCount; 
+			console.log("R: ", r);
+			opts.res.set("content-range",r);
+//			}
+			return results;
 		});
 	},
 
