@@ -162,7 +162,7 @@ DME.prototype.handleMessage=function(msg,socket){
 			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
 			//}
 			if (results && results.count) 
-				if (results instanceOf Array) {
+				if (results instanceof Array) {
 					res = {}
 					res.items = results
 					res.count = results.count;
