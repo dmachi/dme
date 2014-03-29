@@ -57,14 +57,21 @@ var Store = exports.Store= declare([StoreBase], {
 			}
 		}
 
-		console.log("Message Store Query: ", query);
 		if (opts && opts.req && opts.req.headers) {
-			console.log("Query Headers: ", opts.req.headers);
+			console.log("** Query Headers: ", opts.req.headers);
 		}
 		query = query?escape(query):"";
 
-		console.log('sending query: ', query);
+		if (opts && opts.req && opts.req.limit) {
+			console.log("message store req.limit: ", opts.req.limit);
+		}
+
+		console.log('sending query FROM message store: ', query);
+		console.log("MessageSotre this.id: ", this.id);
 		return when(this.send(this.id, "query", query), function(results){
+			console.log("Message Store Query Results: ", results);
+
+			/*
 			console.log("Query Results Len: ", results.length, "count: ", results.count);
 			console.log("Result Keys: ", Object.keys(results).join(","));
 			var end = results.start + results.count;
@@ -76,23 +83,8 @@ var Store = exports.Store= declare([StoreBase], {
 				console.log("R: ", r);
 				opts.res.set("content-range",r);
 			}
+			*/
 //			return results;
-			return when(results, function(results){
-				if (results instanceof Array){
-					return results;
-				}else if ((typeof results=="object")&&results.items){
-					return results;
-				}else{
-					return new LazyArray({
-						some: function(cb){
-							for (var i=0;i<results.count;i++){
-								cb(results[i]);	
-							}
-						}
-					});
-				}
-			});
-
 		});
 	},
 

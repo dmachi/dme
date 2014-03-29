@@ -122,7 +122,7 @@ getExecutor = function(method,facet,model){
 
 DME.prototype.handleMessage=function(msg,socket){
 	var _self = this;
-	//console.log("DME Message Request: ", msg);
+	console.log("DME Message Request: ", msg);
 	var msgParts = msg.type.split("/");
 
 	//get rid of DataModel
@@ -141,12 +141,11 @@ DME.prototype.handleMessage=function(msg,socket){
 	var model = this._Models[model];
 	var params = msg.payload.params || msg.payload;
 
-	//console.log("Params: ", params);
 	if (typeof params=="string"){
 		params = unescape(params);
 	}
 
-	//console.log("Params: ", params);
+	console.log("Message Params: ", params);
 
 	var executor = getExecutor(method,facet,model);
 
@@ -158,11 +157,20 @@ DME.prototype.handleMessage=function(msg,socket){
 
 	if (executor){
 		when(executor.apply(this, [params,routeOpts]), function(results){
-			//console.log("Executor Results: ",results);
+			console.log("Executor Results: ",results);
 			//if (facet.excludedProperties) {
 			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
 			//}
-			//console.log("Send Executor Results: ", results);
+			if (results && results.count) 
+				if (results instanceOf Array) {
+					res = {}
+					res.items = results
+					res.count = results.count;
+					res.start = results.start;
+					results=res;
+				}
+			}
+			console.log("Send Executor Results: ", results);
 			_self.send("DataModel/" + modelId +  "/" + method + "/result",results,routeOpts);
 		}, function(error){
 			console.log("Executor Error Handler", error);

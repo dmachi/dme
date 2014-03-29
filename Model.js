@@ -18,7 +18,6 @@ var Model = exports.Model= declare([EventEmitter],{
 		var _self=this;
 		var out = {};
 		if (object.id) { out.id = object.id }
-		try {
 		if (!this.schema || !this.schema.properties) { throw Error("Missing Schema Properties"); }
 		Object.keys(this.schema.properties).forEach(function(prop){
 			var propDef = _self.schema.properties[prop];
@@ -100,9 +99,6 @@ var Model = exports.Model= declare([EventEmitter],{
 		});
 
 		return out;	
-		} catch(err){
-			return err;			
-		}
 	},
 
 	setSchema: function(schema){
