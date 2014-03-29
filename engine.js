@@ -161,17 +161,16 @@ DME.prototype.handleMessage=function(msg,socket){
 			//if (facet.excludedProperties) {
 			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
 			//}
-			/*
 			if (results && results.count) {
 			//	if (results instanceof Array) {
 					res = {}
-					res.items = results
+					res.items = results.map(function(i){return i; });
 					res.count = results.count;
 					res.start = results.start;
+					res.end = res.start + res.count;
 					results=res;
 			//	}
 			}
-			*/
 			console.log("Send Executor Results: ", results);
 			_self.send("DataModel/" + modelId +  "/" + method + "/result",results,routeOpts);
 		}, function(error){
