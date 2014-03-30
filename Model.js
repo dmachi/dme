@@ -52,8 +52,11 @@ var Model = exports.Model= declare([EventEmitter],{
 				var udType = typeof out[prop];
 				
 				if (propDef.type=="date") {
+					console.log("Date Property: ",prop, out[prop]);
 					if (typeof out[prop]=="string"){
+						console.log("Convert ISO String to Date Object");
 						out[prop]=new Date(Date.parse(out[prop]));
+						console.log("Converted: ", out[prop]);
 					}
 
 					if (!(out[prop].toISOString)){
