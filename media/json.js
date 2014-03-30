@@ -7,6 +7,7 @@ exports.Media =	{
 	},
 
 	deserialize: function(obj, options){
+		console.log("Deserialize From JSON: ", obj);
 		return obj;
 	}
 }

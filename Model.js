@@ -52,6 +52,10 @@ var Model = exports.Model= declare([EventEmitter],{
 				var udType = typeof out[prop];
 				
 				if (propDef.type=="date") {
+					if (typeof out[prop]=="string"){
+						out[prop]=new Date(Date.parse(out[prop]));
+					}
+
 					if (!(out[prop].toISOString)){
 						throw new errors.NotAcceptable("'" + prop +"' expected to be of type " + propDef.type + ", but was " + udType); 
 					}
