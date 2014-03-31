@@ -78,8 +78,9 @@ var Store = exports.Store= declare([StoreBase], {
 			console.log("opts res: ", opts);
 			var r =  "items " + results.start + "-" + end + "/" + results.totalCount; 
 			console.log("R: ", r);
+			if (opts && opts.res) {
 			opts.res.set("content-range",r);
-//			}
+			}
 			return results;
 		});
 	},
