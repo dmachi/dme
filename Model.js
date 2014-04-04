@@ -1,5 +1,6 @@
 var errors = require("./errors");
 var when = require("promised-io/promise").when;
+var MessageStore = require("dme/store/message").Store;
 var EventEmitter = require('events').EventEmitter;
 var util=require("util");
 var declare = require("dojo-declare/declare");
@@ -11,6 +12,15 @@ var Model = exports.Model= declare([EventEmitter],{
 		this.store = store;
 		this.opts = opts;
 		this.setSchema(this.schema);
+		if (this.opts.byPassModel || (this.store instanceof MessageStore)){
+			var bypass = ["get","post","put","delete","query"];
+			bypass.forEach(function(m){
+				var _self=this;
+				this[m] = function(){
+					return _self.store[m].call(this,arguments);	
+				});	
+			},this);
+		}
 	},
 
 	updateObject: function(object,updated){
