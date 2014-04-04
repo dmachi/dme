@@ -164,7 +164,7 @@ DME.prototype.handleMessage=function(msg,socket){
 	}
 
 	if (executor){
-		when(executor.apply(this, params,opts), function(results){
+		when(executor.apply(this, params), function(results){
 			//console.log("Executor Results: ",results);
 			//if (facet.excludedProperties) {
 			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
