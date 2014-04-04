@@ -87,7 +87,12 @@ var Store = exports.Store= declare([StoreBase], {
 
 	post: function(obj,opts){
 		console.log("Message Store Post: ", obj);
-		return this.send(this.id, "post", obj);//{method: "post", params: params});
+		var safeOpts={};
+		Object.keys(opts).forEach(function(key){
+			if (key=="req" || key=="res") { return; }
+			if (typeof opts[key] != "function") { safeOpts[key]=opts[key];}
+		});
+		return this.send(this.id, "post", [obj,safeOpts]);//{method: "post", params: params});
 	},
 
 	put:function(obj, opts){

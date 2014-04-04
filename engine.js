@@ -154,6 +154,7 @@ DME.prototype.handleMessage=function(msg,socket){
 
 	var executor = getExecutor(method,facet,model);
 
+	var opts = params[1] || {};
 	var routeOpts = {
 		destinationId: msg.sourceId,
 		responseMessageId: msg.id,
@@ -161,7 +162,7 @@ DME.prototype.handleMessage=function(msg,socket){
 	}
 
 	if (executor){
-		when(executor.apply(this, [params,routeOpts]), function(results){
+		when(executor.apply(this, [params,opts]), function(results){
 			//console.log("Executor Results: ",results);
 			//if (facet.excludedProperties) {
 			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
