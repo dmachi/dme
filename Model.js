@@ -17,6 +17,7 @@ var Model = exports.Model= declare([EventEmitter],{
 			bypass.forEach(function(m){
 				var _self=this;
 				this[m] = function(){
+					console.log("BYPASSED MODEL: ", m, arguments[0]);
 					return _self.store[m].call(this,arguments);	
 				}	
 			},this);
