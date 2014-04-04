@@ -14,14 +14,13 @@ var Model = exports.Model= declare([EventEmitter],{
 	},
 
 	updateObject: function(object,updated){
-		console.log("Update Obj");
 		var _self=this;
 		var out = {};
 		if (object.id) { out.id = object.id }
 		if (!this.schema || !this.schema.properties) { throw Error("Missing Schema Properties"); }
 		Object.keys(this.schema.properties).forEach(function(prop){
 			var propDef = _self.schema.properties[prop];
-			console.log("prop: ", prop, "propDef: ", propDef);
+			//console.log("prop: ", prop, "propDef: ", propDef);
 			if (!prop || (prop=="id") || (typeof propDef=="function")) { return; }
 
 			if ((propDef.type=="readonly")&&(typeof object[prop]!="undefined")){
@@ -40,7 +39,7 @@ var Model = exports.Model= declare([EventEmitter],{
 			}else if (updated[prop]){
 				out[prop]=updated[prop];
 			}else{
-				console.log("Property Not Defined: ", prop);
+				//console.log("Property Not Defined: ", prop);
 			}
 
 			if (propDef['enum'] && updated[prop] && (propDef['enum'].indexOf(updated[prop])==-1)){
@@ -48,15 +47,15 @@ var Model = exports.Model= declare([EventEmitter],{
 			}
 			
 			if (propDef.type && out[prop]) {
-				console.log("Check out[prop] as ", propDef.type, propDef, typeof out[prop]);
+				//console.log("Check out[prop] as ", propDef.type, propDef, typeof out[prop]);
 				var udType = typeof out[prop];
 				
 				if (propDef.type=="date") {
-					console.log("Date Property: ",prop, out[prop]);
+					//console.log("Date Property: ",prop, out[prop]);
 					if (typeof out[prop]=="string"){
-						console.log("Convert ISO String to Date Object");
+						//console.log("Convert ISO String to Date Object");
 						out[prop]=new Date(Date.parse(out[prop]));
-						console.log("Converted: ", out[prop]);
+						//console.log("Converted: ", out[prop]);
 					}
 
 					if (!(out[prop].toISOString)){
@@ -121,7 +120,7 @@ var Model = exports.Model= declare([EventEmitter],{
 		_self.store.setSchema(schema);	
 	},
 	get: function(id,opts){
-		console.log("Call Store Get: ", id, "store id", this.store.id);
+		//console.log("Call Store Get: ", id, "store id", this.store.id);
 		return this.store.get(id,opts);
 	},
 	query: function(query, opts){

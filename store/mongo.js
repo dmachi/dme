@@ -49,7 +49,9 @@ var Store = exports.Store=declare([StoreBase], {
 
 	"get": function(id, options){
 		var def = new defer();
+//		console.log("Mongo Store GET:", id);
 		var cursor = this.collection.find({id: id}).limit(1).toArray(function(err,docs){
+//			console.log("Mong Store GET results: ", docs);
 			var obj = docs[0];
 			if (err) { console.log("MONGO DB GET ERROR: ", err); def.reject(err);return; }
 			if (obj && obj._id) { delete obj._id; }
@@ -237,7 +239,7 @@ var Store = exports.Store=declare([StoreBase], {
 
 
 		this.collection.count(search, function(err,totalCount){
-			if (err) { console.log("collection coutn error: ", err); totalCount=0; totalCountPromise.reject(err);return; }
+			if (err) { console.log("collection count error: ", err); totalCount=0; totalCountPromise.reject(err);return; }
 			//console.log("count() totalCount: ", totalCount);
 			totalCount -= meta.lastSkip;
 			if (totalCount < 0)
@@ -319,7 +321,7 @@ var Store = exports.Store=declare([StoreBase], {
 			obj = this.normalizeObject(obj);
 /*
 			this.collection.save(obj, {safe: true}, function(err,obj){
-				console.log("Saved: ", obj);
+				//console.log("Saved: ", obj);
 				if (err) {def.reject(err); return;}
 				def.resolve(obj);	
 			});	
@@ -458,3 +460,4 @@ var Store = exports.Store=declare([StoreBase], {
 		return def.promise;
 	}
 });
+
