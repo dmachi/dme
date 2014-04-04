@@ -5,7 +5,6 @@ var declare = require("dojo-declare/declare");
 
 var store = exports.Store = declare([EventEmitter], {
 	constructor: function(id, options) { 
-		console.log("Options: ", options);
 		this.id = id;
 		this.options=options;
 		this.init();
