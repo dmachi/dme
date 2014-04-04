@@ -18,7 +18,7 @@ var Model = exports.Model= declare([EventEmitter],{
 				var _self=this;
 				this[m] = function(){
 					return _self.store[m].call(this,arguments);	
-				});	
+				}	
 			},this);
 		}
 	},
