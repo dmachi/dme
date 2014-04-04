@@ -61,6 +61,8 @@ var Model = exports.Model= declare([EventEmitter],{
 					if (!(out[prop].toISOString)){
 						throw new errors.NotAcceptable("'" + prop +"' expected to be of type " + propDef.type + ", but was " + udType); 
 					}
+				} else if ((propDef.type=="array") && (udType=="object" ) && ((out[prop] instanceof Array)||(out[prop].forEach))) {
+					// do nothing		
 				} else if (propDef.type != udType){
 					throw new errors.NotAcceptable("'" + prop +"' expected to be of type " + propDef.type + ", but was " + udType); 
 				}
