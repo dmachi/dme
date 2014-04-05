@@ -144,6 +144,7 @@ DME.prototype.handleMessage=function(msg,socket){
 	//console.log("ModelId: ", modelId);
 	var facet = this._Facets[modelId].message
 	var model = this._Models[model];
+	msg.payload=JSON.parse(msg.payload);
 	var params = msg.payload.params || msg.payload;
 
 	if (typeof params=="string"){
