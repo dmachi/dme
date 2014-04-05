@@ -108,12 +108,20 @@ getExecutor = function(method,facet,model){
 		if (facet[method] && (typeof facet[method]=="function")){
 			return function() {
 				//console.log("queryFn args: ", arguments);
+				if (arguments[0] && (typeof arguments[0]=='string') && ((arguments[0].charAt(0)=='{')||(arguments[0].charAt(0)=='['))) { 
+					var params  = JSON.parse(arguments[0]);
+					return facet[method].call(facet,params.params?params.params:params);
+				 }
 				return facet[method].apply(facet,arguments);
 			}
 			//return facet[method];
 		}else if (facet[method] && (facet[method]===true) && model[method] ){
 			return function() {
 				//console.log("queryFn args: ", arguments);
+                                if (arguments[0] && (typeof arguments[0]=='string') && ((arguments[0].charAt(0)=='{')||(arguments[0].charAt(0)=='['))) { 
+                                        var params  = JSON.parse(arguments[0]); 
+                                        return model[method].call(model,params.params?params.params:params);
+                                 }   
 				return model[method].apply(model,arguments);
 			}
 			//return model[method]	
@@ -144,8 +152,9 @@ DME.prototype.handleMessage=function(msg,socket){
 	//console.log("ModelId: ", modelId);
 	var facet = this._Facets[modelId].message
 	var model = this._Models[model];
-	msg.payload=JSON.parse(msg.payload);
-	var params = msg.payload.params || msg.payload;
+//	msg.payload=JSON.parse(msg.payload);
+//	var params = msg.payload.params || msg.payload;
+	params = msg.payload;
 
 	if (typeof params=="string"){
 		params = unescape(params);
