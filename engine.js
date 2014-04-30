@@ -10,6 +10,7 @@ var DME = exports.DataModelEngine = function(dataModel,opts) {
 	EventEmitter.call(this);
 	this.models = dataModel;
 	this.facets = {}
+	console.log("DME Opts: ", opts);
 	this.opts = opts || {};	
 	this._Models={};
 	this._Stores={};
@@ -41,9 +42,13 @@ DME.prototype.init=function(skipRegisterRoute){
 	console.log("DME Init() ", arguments);
 	var _self=this;
 	Object.keys(this.models).forEach(function(prop){  //for (var prop in this.models){
+		//console.log("Model Propert: ", prop);
 		var M = this.models[prop];
+		//console.log("M: ", M);
+		//console.log("M.store", M.store);
 		var opts = M.storeOpts || {};
 		//console.log("DatabaseOptions: ", _self.opts.database);
+
 		var auth = ((_self.opts.database && _self.opts.database[prop])?_self.opts.database[prop]:_self.opts.database[M.store.prototype.authConfigProperty])||{};
 		opts.auth = auth;
 		//console.log("DB INIT Options: ", M.collectionId?M.collectionId:prop, opts);
@@ -53,7 +58,7 @@ DME.prototype.init=function(skipRegisterRoute){
 	
 		if (M.notifications){
 			this._Models[prop].on('message', function(msg){
-				console.log("Emitting Notification Message from DME");
+//				console.log("Emitting Notification Message from DME");
 				msg.model = prop;
 				_self.emit('message', msg);
 			});
@@ -103,12 +108,20 @@ getExecutor = function(method,facet,model){
 		if (facet[method] && (typeof facet[method]=="function")){
 			return function() {
 				//console.log("queryFn args: ", arguments);
+				if (arguments[0] && (typeof arguments[0]=='string') && ((arguments[0].charAt(0)=='{')||(arguments[0].charAt(0)=='['))) { 
+					var params  = JSON.parse(arguments[0]);
+					return facet[method].call(facet,params.params?params.params:params);
+				 }
 				return facet[method].apply(facet,arguments);
 			}
 			//return facet[method];
 		}else if (facet[method] && (facet[method]===true) && model[method] ){
 			return function() {
 				//console.log("queryFn args: ", arguments);
+                                if (arguments[0] && (typeof arguments[0]=='string') && ((arguments[0].charAt(0)=='{')||(arguments[0].charAt(0)=='['))) { 
+                                        var params  = JSON.parse(arguments[0]); 
+                                        return model[method].call(model,params.params?params.params:params);
+                                 }   
 				return model[method].apply(model,arguments);
 			}
 			//return model[method]	
@@ -122,7 +135,7 @@ getExecutor = function(method,facet,model){
 
 DME.prototype.handleMessage=function(msg,socket){
 	var _self = this;
-	console.log("DME Message Request: ", msg);
+	//console.log("DME Message Request: ", msg);
 	var msgParts = msg.type.split("/");
 
 	//get rid of DataModel
@@ -139,16 +152,21 @@ DME.prototype.handleMessage=function(msg,socket){
 	//console.log("ModelId: ", modelId);
 	var facet = this._Facets[modelId].message
 	var model = this._Models[model];
-	var params = msg.payload.params || msg.payload;
+//	msg.payload=JSON.parse(msg.payload);
+//	var params = msg.payload.params || msg.payload;
+	params = msg.payload;
 
 	if (typeof params=="string"){
 		params = unescape(params);
 	}
 
-	console.log("Message Params: ", params);
+	//console.log("Message Params: ", params);
 
 	var executor = getExecutor(method,facet,model);
 
+	if (!(params instanceof Array)){
+		params=[params,{}];
+	}	
 	var routeOpts = {
 		destinationId: msg.sourceId,
 		responseMessageId: msg.id,
@@ -156,8 +174,8 @@ DME.prototype.handleMessage=function(msg,socket){
 	}
 
 	if (executor){
-		when(executor.apply(this, [params,routeOpts]), function(results){
-			console.log("Executor Results: ",results);
+		when(executor.apply(this, params), function(results){
+			//console.log("Executor Results: ",results);
 			//if (facet.excludedProperties) {
 			//	results = _self.filterObjectProperties(results, facet.excludedProperties);
 			//}
@@ -173,14 +191,14 @@ DME.prototype.handleMessage=function(msg,socket){
 			//	}
 			}
 			*/
-			console.log("Send Executor Results: ", results);
+			//console.log("Send Executor Results: ", results);
 			_self.send("DataModel/" + modelId +  "/" + method + "/result",results,routeOpts);
 		}, function(error){
 			console.log("Executor Error Handler", error);
 			_self.send("DataModel/" + modelId +  "/" + method + "/error",{error: 500, message: "Error Executing RPC Method: " + error},routeOpts);
 		}) 
 	}else{
-		console.log("No Executor");
+		//console.log("No Executor");
 		_self.send("DataModel/" + modelId +  "/" + method + "/error",{error: 404, message: "Unabled to Find or Access RPC Method: " + method},routeOpts);
 
 	}	
