@@ -263,7 +263,8 @@ DME.prototype.getMiddleware=function(opts) {
 			}
 
 			if (req.headers && req.headers.templateStyle){
-				req.templateId = req.templateId + "-" + req.headers.templateStyle;
+				req.templateStyle = req.headers.templateStyle;
+//				req.templateId = req.templateId + "-" + req.headers.templateStyle;
 			}
 		
 

@@ -22,10 +22,12 @@ exports.Media = {
 	serialize: function(obj,opts){
 		var def = new defer();
 
-		var specificTemplate = opts.req.templateId + "/" + obj.id + (opts.req.templateStyle?("-"+opts.req.templateStyle):"")
+		var specificTemplate = opts.req.templateId + ((obj&&obj.id)?("/" + obj.id):"") + (opts.req.templateStyle?("-"+opts.req.templateStyle):"")
 ;		
+		console.log("Specific Template: ", specificTemplate);
 		opts.res.render(specificTemplate,{results: obj,request:opts.req},function(err,html){
 			if (err) {
+				console.log("err: ", err);
 				opts.res.render(opts.req.templateId + (opts.req.templateStyle?("-"+opts.req.templateStyle):""), {results: obj, request: opts.req}, function(err,html){
 					if (err) { 
 						return def.reject(err); 
