@@ -1,6 +1,6 @@
 var errors = require("./errors");
 var when = require("promised-io/promise").when;
-var MessageStore = require("dme/store/message").Store;
+var MessageStore = require("./store/message").Store;
 var EventEmitter = require('events').EventEmitter;
 var util=require("util");
 var declare = require("dojo-declare/declare");

@@ -49,9 +49,11 @@ DME.prototype.init=function(skipRegisterRoute){
 		var opts = M.storeOpts || {};
 		//console.log("DatabaseOptions: ", _self.opts.database);
 
+//		console.log("AuthConfigProp: ", M.store.prototype.authConfigProperty, _self.opts.database[M.store.prototype.authConfigProperty])
 		var auth = ((_self.opts.database && _self.opts.database[prop])?_self.opts.database[prop]:_self.opts.database[M.store.prototype.authConfigProperty])||{};
 		opts.auth = auth;
-		//console.log("DB INIT Options: ", M.collectionId?M.collectionId:prop, opts);
+		//console.log("DB INIT Options: ",M.collectionId || prop:prop, opts, opts.auth);
+
 		this._Stores[prop] = M.Store = new M.store(M.collectionId || prop,opts);
 		this._Models[prop] = M.Model =  new M.model(M.Store, this.opts);
 		this._Models[prop].engine = _self;
@@ -679,6 +681,7 @@ DME.prototype.handleResults=function(req,res,next){
 DME.prototype.registerExpressRoutes=function(expressApp){
 	console.log("Register Express Routes.");
 	var _self=this;
+	console.log("Models: ", this.models);
 	for (prop in this.models){
 		this.registerRoute(prop, this._Facets[prop], this._Models[prop],expressApp);
 	}
