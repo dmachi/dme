@@ -397,7 +397,7 @@ DME.prototype.getMiddleware=function(opts) {
 					//console.log("Requested RPC Params: ", params);
 					//console.log("Allowed RPC Methods: ", req.facet.rpcMethods);	
 					if((req.facet.rpcMethods=="*")||(req.facet.rpcMethods&&(req.facet.rpcMethods.indexOf(params.method)>=0))){
-						console.log("RPC Call: ",params.method, params.params);
+						console.log("RPC Call method ",params.method, "params: ",  params.params);
 						var fn = function(p){
 								//console.log("RPC Call");
 							//console.log("Facet: ", req.facet[params.method]);		
@@ -414,7 +414,11 @@ DME.prototype.getMiddleware=function(opts) {
 								//console.log("params: ", params, "req.params:", req.params);
 								var z =  params.params.concat([{req:req,res:res}]);
 								if (req.params && req.params.length>0) {
-									var zz = [].concat(req.params).concat(z);
+									var zz = []
+									req.params.forEach(function(p){
+										if (p) { zz.push(p); }
+									});
+									var zz = [].concat(z);
 									z=zz;
 								}
 								ret = e[params.method].apply(e, z);
