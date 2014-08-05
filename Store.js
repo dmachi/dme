@@ -7,7 +7,7 @@ var store = exports.Store = declare([EventEmitter], {
 	constructor: function(id, options) { 
 		this.id = id;
 		this.options=options;
-		this.init();
+		this.init(id,options);
 	},
 	"setSchema":function(schema){
 		this.schema=schema;

@@ -52,15 +52,25 @@ DME.prototype.init=function(skipRegisterRoute){
 //		console.log("AuthConfigProp: ", M.store.prototype.authConfigProperty, _self.opts.database[M.store.prototype.authConfigProperty])
 		var auth = ((_self.opts.database && _self.opts.database[prop])?_self.opts.database[prop]:_self.opts.database[M.store.prototype.authConfigProperty])||{};
 		opts.auth = auth;
-		//console.log("DB INIT Options: ",M.collectionId || prop:prop, opts, opts.auth);
+//		console.log("DB INIT Options: ",M.collectionId || prop, opts, opts.auth);
 
+//		console.log("Instantiate Store [" + prop + "] with opts: ", opts);
 		this._Stores[prop] = M.Store = new M.store(M.collectionId || prop,opts);
+		if (prop=="collection"){
+			console.log("this._store[" + prop+ "] : ",this._Stores[prop]);
+		}
+//		console.log("Instantiate Model [" + prop + "] with opts: ", this.opts);
+
 		this._Models[prop] = M.Model =  new M.model(M.Store, this.opts);
+
+		if (prop=="collection"){
+			console.log("this._Models[" + prop+ "] : ",this._Models[prop]);
+		}
 		this._Models[prop].engine = _self;
 	
 		if (M.notifications){
 			this._Models[prop].on('message', function(msg){
-//				console.log("Emitting Notification Message from DME");
+				console.log("Emitting Notification Message from DME");
 				msg.model = prop;
 				_self.emit('message', msg);
 			});
@@ -105,7 +115,7 @@ DME.prototype.declareGlobal = function(prop, facet, model,scope){
 }
 
 getExecutor = function(method,facet,model){
-	//console.log("Method: ", method, "Facet: ", facet, "Model: ", model);
+	//console.log("Method: ", method, "Facet: ", !!facet, "Model: ", !!model);
 	if (facet.rpc && (facet.rpcMethods=="*" || (facet.rpcMethods.indexOf(method)>=0))){
 		if (facet[method] && (typeof facet[method]=="function")){
 			return function() {
@@ -116,7 +126,6 @@ getExecutor = function(method,facet,model){
 				 }
 				return facet[method].apply(facet,arguments);
 			}
-			//return facet[method];
 		}else if (facet[method] && (facet[method]===true) && model[method] ){
 			return function() {
 				//console.log("queryFn args: ", arguments);
@@ -126,7 +135,6 @@ getExecutor = function(method,facet,model){
                                  }   
 				return model[method].apply(model,arguments);
 			}
-			//return model[method]	
 		}
 		console.log("Invalid RPC Method:", method);
 		return false;	
@@ -153,7 +161,7 @@ DME.prototype.handleMessage=function(msg,socket){
 	var method = msgParts[1] || "get";
 	//console.log("ModelId: ", modelId);
 	var facet = this._Facets[modelId].message
-	var model = this._Models[model];
+	var model = this._Models[modelId];
 //	msg.payload=JSON.parse(msg.payload);
 //	var params = msg.payload.params || msg.payload;
 	params = msg.payload;
@@ -162,7 +170,7 @@ DME.prototype.handleMessage=function(msg,socket){
 		params = unescape(params);
 	}
 
-	//console.log("Message Params: ", params);
+	console.log("Message Params: ", params);
 
 	var executor = getExecutor(method,facet,model);
 
@@ -214,6 +222,7 @@ DME.prototype.getMiddleware=function(opts) {
 		// extract http_* and set those as http headers
 		function(req,res,next){
 			if (req.query) {
+				//console.log("middleware1 query: ", req.query);
 				for (param in req.query){
 					if (param.match("http_")){
 						//console.log("param: ", param, req.query[param]);
@@ -303,7 +312,8 @@ DME.prototype.getMiddleware=function(opts) {
 			var q= req&&req._parsedUrl&&req._parsedUrl.query?unescape(req._parsedUrl.query):"";
 //			var q = req._parsedUrl.query;
 			req.originalQuery = req._parsedUrl.query;	
-			//console.log("Process Range Header: ", req.headers);	
+//			console.log("req.original query: ", req.originalQuery);
+//			console.log("Process Range Header: ", req.headers);	
 
 			if (req.headers.range) {
 				var range = req.headers.range.match(/^items=(\d+)-(\d+)?$/);
@@ -336,7 +346,7 @@ DME.prototype.getMiddleware=function(opts) {
 				limiter= "&limit(" + requestedLimit+ "," + start + "," + maxCount + ")";
 				q += limiter;
 			}else{
-				req.limit={start: start||0, limit: Infinity}
+				req.limit={start: start||0, limit: 1000}
 			}
 			//console.log("Pre-Parse: ", q);
 			var parsed;
@@ -345,6 +355,7 @@ DME.prototype.getMiddleware=function(opts) {
 			}else{
 				parsed="";
 			}
+			//console.log("parsed query: ", parsed);
 /*
 			if (!requestedLimit && parsed && parsed.cache && parsed.cache.limit) {
 				if (limit!=Infinity) {
@@ -358,8 +369,7 @@ DME.prototype.getMiddleware=function(opts) {
 */
 
 			req.query = parsed;
-			//console.log("re.query: ", req.query);
-//			console.log("query: ", q);
+			//console.log("parsed req.query: ", req.query);
 			next();
 		},
 
@@ -470,7 +480,7 @@ DME.prototype.getMiddleware=function(opts) {
 			}
 			
 			when(res.results, function(results){
-//				console.log('res.results_2 length: ', results.length);
+//				//console.log('res.results_2 length: ', results.length);
 				if (results && results.stream) {
 					return;
 				}	
@@ -479,6 +489,7 @@ DME.prototype.getMiddleware=function(opts) {
 					res.error=results;
 				}
 				res.results=results;
+				//console.log("res.results: ", res.results);
 				next();
 			}, function(err){
 				res.error=err;
@@ -489,10 +500,11 @@ DME.prototype.getMiddleware=function(opts) {
 
 		function(req, res, next){
 			 when(res.results, function(results){
-//				console.log("rpc check", results); 
+				//console.log(" - results1", results);
+//				//console.log("rpc check", results); 
 				//if we're processing an rpc call, just return results
 				//the rpc method is responsible for filtering any resultant properties
-//				console.log("res.results processing: ", results, arguments);
+//				//console.log("res.results processing: ", results, arguments);
 				if (results && results.stream) {  return; }
 				//console.log("results: ", results);
 				if (!results && (results!==false)){
@@ -525,6 +537,7 @@ DME.prototype.getMiddleware=function(opts) {
 					return;
 				}
 
+				/*
 				if (req.facet.excludedProperties){
 					if (results.forEach){
 						res.results = results.map(function(o){
@@ -533,8 +546,10 @@ DME.prototype.getMiddleware=function(opts) {
 					}else{
 						res.results = _self.filterObjectProperties(results, req.facet.excludedProperties);
 					}
+
+					console.log(" - excluded props", res.results);
 				}
-				//res.results = results;
+				*/
 				next();
 				
 			});/*, function(e){
@@ -546,19 +561,21 @@ DME.prototype.getMiddleware=function(opts) {
 
 
 		function(req,res,next){
-//			console.log("res.results: ", res.results);
+			//console.log("res.results before totalCount: ", res.results);
 			when(res.results, function(results){
 				if (res.totalCount && res) {
 					//console.log("Got Total Count: ", res.totalCount);
 					res.set("content-range", "items=" + ((req && req.limit)?req.limit.start:0) + "-" + (((req&&req.limit)?req.limit.start:0)+results.length) + "/" + (res.totalCount));	
 				}
+
+
 				next();
 			});	
 		}, 
 		function(req,res,next){
-//			console.log("res.results: ", res.results);
+			//console.log("res.results before final when: ", res.results);
 			when(res.results, function(results){
-//				console.log("RES.RESULTS FINAL MIDDLEWARE: ", results);
+				//console.log("RES.RESULTS FINAL MIDDLEWARE: ", results);
 				if (results && results.file){
 					console.log("Send Download File: ", results.file);
 					res.sendfile(results.file,  function(err){

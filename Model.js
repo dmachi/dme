@@ -13,18 +13,26 @@ var Model = exports.Model= declare([EventEmitter],{
 		this.opts = opts;
 		this.setSchema(this.schema);
 		if (this.opts.byPassModel || (this.store instanceof MessageStore)){
+			//return this.store;
 			var bypass = ["get","post","put","delete","query"];
 			bypass.forEach(function(m){
 				var _self=this;
 				this[m] = function(){
-					console.log("BYPASSED MODEL: ", m, arguments[0]);
-					return _self.store[m].call(this,arguments);	
+					console.log("BYPASSED MODEL: ", m, arguments);
+					var args=[]
+					for (var i=0; i<arguments.length;i++){
+						args.push(arguments[i]);
+					}
+					console.log("Call store with args: ", args);
+					return _self.store[m].apply(_self.store,args);	
 				}	
 			},this);
 		}
+		console.log("Complete ModelBase Setup");
 	},
 
 	updateObject: function(object,updated){
+		console.log("updateObject()");
 		var _self=this;
 		var out = {};
 		if (object.id) { out.id = object.id }
@@ -39,7 +47,7 @@ var Model = exports.Model= declare([EventEmitter],{
 			}
 		
 			if (propDef.type=="transient"){
-				return;
+				delete out[prop];
 			}
 
 			if ((typeof object[prop]=="undefined") && (typeof updated[prop]=='undefined') && (!propDef.optional) ){

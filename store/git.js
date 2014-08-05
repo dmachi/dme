@@ -51,8 +51,11 @@ var Store = exports.Store=declare([StoreBase],{
 
 					when(_self.getMetadata(repo,id),function(md){
 						if (md) {
+								
 							console.log("Push Metadata for ", md.id, " into index.\n");
-							index.push(md);	
+							//if (!index[md.id]) {
+								index.push(md);	
+							//}
 							index[md.id]=md;
 							return def.resolve(true);
 						}
@@ -68,6 +71,7 @@ var Store = exports.Store=declare([StoreBase],{
 			});
 
 			when(All(defs), function(){
+				console.log(JSON.stringify(index,null,4));
 				d.resolve(index);
 			});
 
@@ -138,7 +142,7 @@ var Store = exports.Store=declare([StoreBase],{
 	get: function(fullId,opts){
 		var parts = fullId.split("/");
 		var id = parts.shift();
-		var subPath = parts.join("/");
+		var subPath = opts.subPath || parts.join("/");
 
 		var _self=this;
 		if (opts && opts.rawGitRequest){
@@ -409,7 +413,7 @@ var Store = exports.Store=declare([StoreBase],{
 						when(_self.get(obj.id),function(obj){
 							when(_self.updateIndex(obj), function(){	
 								console.log("PUT res: ", obj);
-								return obj;
+								putDef.resolve(obj);
 							});
 						});
 					});

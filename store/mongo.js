@@ -6,6 +6,7 @@ var when = require("promised-io/promise").when;
 var LazyArray = require("promised-io/lazy-array").LazyArray;
 var randomstring = require("randomstring");
 var parser = require("rql/parser");
+var jsArray = require('rql/js-array');
 var declare = require("dojo-declare/declare");
 
 
@@ -237,8 +238,9 @@ var Store = exports.Store=declare([StoreBase], {
 		var totalCountPromise = new defer();
 
 
-
+		console.log("get collection search count, ",search);
 		this.collection.count(search, function(err,totalCount){
+			console.log("mongo returned totalCount",totalCount);
 			if (err) { console.log("collection count error: ", err); totalCount=0; totalCountPromise.reject(err);return; }
 			//console.log("count() totalCount: ", totalCount);
 			totalCount -= meta.lastSkip;
@@ -290,18 +292,30 @@ var Store = exports.Store=declare([StoreBase], {
 				if (fields) {
 					// unhash objects to arrays
 					if (meta.unhash) {
-						results = jsArray.executeQuery('values('+fields+')', opts, results);
+						console.log("unhash fields: ", fields);
+						console.log('results: ', results);
+						//results = jsArray.executeQuery('values('+fields+')', {}, results);
+						results = results.map(function(r){
+							var values=Object.keys(r).filter(function(key){
+								return (fields.indexOf(key)>=0)	
+							}).map(function(key){
+								return r[key];	
+							});
+							if (values.length==1){ return values[0]; }
+							return values;
+						});
+						console.log("unhashed results: ",results);	
 					}
 				}
 				// total count
 				when(totalCountPromise, function(result){
-					//console.log("when totalCountPromise: ", results, result);
+					console.log("when totalCountPromise");
 					results.count = results.length;
 					results.start = meta.skip;
 					results.end = meta.skip + results.count;
 					results.schema = _self.schema.id; //schema;
 					results.totalCount = result;
-					//dir('ESULTS:, results.slice(0,0));
+					console.log('ESULTS:', results.slice(0,0));
 					deferred.resolve(results);
 				});
 			});

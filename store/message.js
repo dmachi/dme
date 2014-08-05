@@ -8,16 +8,19 @@ var declare = require("dojo-declare/declare");
 
 
 var Store = exports.Store= declare([StoreBase], {
-	init: function(id,options){
-		if (!this.options.send){
+	
+	init: function(){
+		console.log("Message Store Init: ", this.id, this.options);
+		if (!this.options || !this.options.send){
 			console.log("Message Store requires a send() function to deliver messsages");
 		}
+
 		this.send = this.options.send;
 	},
 
 	get: function(id,opts){
+		console.log("get() this: ", this, id);
 		return this.send(this.id, "get", id)
-
 	},
 
 	trimOpts: function(opts){
@@ -87,7 +90,11 @@ var Store = exports.Store= declare([StoreBase], {
 		console.log("Message Store Post: ", obj);
 		var safeOpts={};
 		Object.keys(opts).forEach(function(key){
-			if (key=="req" || key=="res") { return; }
+			if (key=="res") { return; }
+			if (key=="req") { 
+				safeOpts.req={}
+				safeOpts.req.user = opts.req.user;
+			}
 			if (typeof opts[key] != "function") { safeOpts[key]=opts[key];}
 		});
 		return this.send(this.id, "post", [obj,safeOpts]);//{method: "post", params: params});

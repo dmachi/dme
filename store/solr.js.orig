@@ -9,7 +9,7 @@ var util = require("util");
 var defer = require("promised-io/promise").defer;
 var when = require("promised-io/promise").when;
 var declare = require("dojo-declare/declare");
-var jsArray= require("rql/js-array")
+
 var handlers = [
 	["and", function(query, options){
 		var parts=[]
@@ -98,6 +98,8 @@ var handlers = [
 	["not", function(query, options){
 		return "NOT " + walkQuery(query.args[0],options);
 	}],
+
+
 
 	["in", function(query, options){
 		//console.log("IN ", query.args[0], query.args[1]);
@@ -201,8 +203,7 @@ var handlers = [
 	}],
 
 	["select", function(query, options){
-		//options.select=query.args[0]
-		options.select=query.args[0];
+		return;
 	}],
 	["sort", function(query, options){
 		return;
@@ -245,11 +246,9 @@ Query.prototype.toSolr = function(SolrQuery,options){
 			q.set("fq=" + fq);
 			//q.fq(fq);
 		});
-	}
+	}	
 
-	if (query.select){
-		q.set("fl=" + query.select.join(","));
-	}
+	
 
 	console.log("SolrQuery: ", q);
 	
@@ -341,58 +340,146 @@ var Store = exports.Store = declare([StoreBase], {
 	query: function(query, opts){
 //		console.log("Store Options: ", this.options);
 		var _self=this;
+		var def = new defer();
 		console.log("SOLR QUERY: ", query);
 		q = (!query || typeof query == 'string')?Query(query):query;
-		if (!q.toSolr) { q.toSolr = Query.prototype.toSolr; }
-		var squery = q.toSolr(_self.client.createQuery());
+		console.log("PARSED SOLR QUERY: ", q);
+		rqlOptions = q.cache;
+		rqlOptions.handlers = this._handlers;
+		rqlOptions.post = rqlOptions.post || []
 
-		var searchDef = new defer();
+		var squery = q.toSolr(_self.client.createQuery(), rqlOptions);
+
+		console.log("SOLR QUERY: ",squery, "rqlOptions: ", rqlOptions);
 		_self.client.search(squery, function(err, obj){
 			if (err){
 				console.log("SOLR Error Response: ", err);
-				return searchDef.reject(err);
+				return def.reject(err);
 			}else{
 				//console.log("obj: ", obj);
-				if (obj && obj.response) {
-					var responseItems = obj.response.docs;
-					searchDef.resolve(obj.response);	
-				}else{
-					searchDef.reject(Error("Invalid Response Object"));
+				if (obj && obj.response && obj.response.docs  && obj.response.docs instanceof Array ){// && obj.response && obj.response.docs){
+
+				var qp = q.normalize();
+				var distinctMap={};
+				var responseItems = obj.response.docs;
+
+				if (rqlOptions.facetValues && rqlOptions.facetValues.length>0){
+//					console.log("Retrieving Facet Values: ", rqlOptions.facetValues);
+					if (obj.facet_counts){
+						var ff = obj.facet_counts.facet_fields;
+						if (!ff){ throw Error("Facet Fields Not Found in results"); }
+							var fo= [] 
+							rqlOptions.facetValues.forEach(function(fv){
+							//	console.log("fv: ", fv);
+//								console.log("ff[fv]: ", ff[fv]);	
+								if (ff[fv]){
+									var keys = ff[fv].forEach(function(obj,index){
+//										console.log("Filtering: ", obj, x, ((x%2)==0));	
+										if ((index % 2) == 0){
+											fo.push({
+												key: obj,
+												count: ff[fv][index+1]
+											});
+										}
+									});
+								//	console.log("keys: ", keys);
+									fo = fo.concat(keys);
+								}
+							});
+
+//							def.resolve(fo);
+							responseItems = fo;
+//							console.log("ResponseItems:", responseItems, fo);
+//							def.resolve(fo);
+		
+						}else{
+							throw new Error ("Facet Field Values could not be retrieved");
+						}
+					}
+
+					var items = responseItems.map(function(item){
+						//console.log("item: ", item);
+						if(item && typeof item === "object"){
+							var object = {};
+							if (rqlOptions.distinct){
+								if (rqlOptions.distinct.some(function(field){
+									if (!(distinctMap[field])){
+										distinctMap[field]={};
+									}
+									if(distinctMap[field][item[field]]){	
+										return true;	
+									}
+
+									distinctMap[field][item[field]]=true;	
+									return false;
+								})){
+									return null;
+								}
+							}
+							if (rqlOptions.values){
+								if(typeof rqlOptions.values=='string'){
+									object = item[rqlOptions.values];
+								}else if(rqlOptions.values.length==1){
+									object = item[rqlOptions.values[0]];
+								}else{
+									object = rqlOptions.values.map(function(v){
+										return item[v];
+									});
+								}
+									
+							}else if (qp && qp.select && qp.select.length>0){
+								qp.select.forEach(function(prop){
+									object[prop]=(typeof item[prop]!='undefined')?item[prop]:undefined;
+								});
+							}else{
+
+								for(var i in item){
+									if(item.hasOwnProperty(i)){
+										object[i] = item[i];
+									}
+								}
+
+							}
+
+							rqlOptions.post.forEach(function(h){
+								object = h[1](object);
+							});	
+						}
+						return object;
+					}).filter(function(o){return !!o});
+					
+					if (obj.facet_counts){
+						var facets = obj.facet_counts;
+
+						if (!items || items.length<1){ 
+							
+							return def.resolve({totalRows: obj.response.numFound, facets: facets});
+						}
+
+						return def.resolve({totalRows: obj.response.numFound, items: items, facets: facets});
+					}
+					if (opts && opts.res) {
+						opts.res.totalCount = obj.response.numFound;
+						console.log("opts.res: ", opts.res.totalCount);
+					}
+					def.resolve(items);
+				}else if (rqlOptions.values){
+				var items = responseItems.map(function(item) {
+					if(typeof rqlOptions.values=='string'){
+						object = item[rqlOptions.values];
+					}else if(rqlOptions.values.length==1){
+						object = item[rqlOptions.values[0]];
+					}else{
+						object = rqlOptions.values.map(function(v){
+							return item[v];
+						});
+					}
+				})
+				def.resolve(items);	
 				}
 			}
 		});
-
-		return when(searchDef,function(responseObj){
-			return _self.postProcessQuery(responseObj.docs, responseObj, q);	
-		});
-	},
-
-	postProcessQuery: function(items, responseObject, query){
-//		console.log("POST Process Items: ", items);
-//		console.log("POST Process Query: ", query);
-		var q="";
-		if (query.cache.values){
-			var fields=(typeof query.cache.values=='string')?query.cache.values.split(','):query.cache.values;
-			items = items.map(function(item){
-				var obj = []
-				Object.keys(item).filter(function(key){
-					console.log("Checking for ", key);
-					return fields.indexOf(key)>=0;
-				}).forEach(function(key){
-					console.log("Adding to item array: ", key, item[key]);
-					obj.push(item[key]);
-				});
-				if (obj.length==1){
-					console.log("obj: ", obj[0]);
-					return obj[0];
-				}
-				console.log("obj: ", obj);
-				return obj;
-				
-			});
-		}
-
-		return items;
+		return def.promise;
 	},
 
 	get: function(id, opts){
