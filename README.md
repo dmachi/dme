@@ -18,68 +18,66 @@ objects.
 
 ...
 
+	// get some modules
+	var app = module.exports =  express();
+	var DataModel = require("dme/DataModel");
+	var engine = require("dme");
+	var RestrictiveFacet = require("dme/RestrictiveFacet");
 
-// get some modules
-var app = module.exports =  express();
-var DataModel = require("dme/DataModel");
-var engine = require("dme");
-var RestrictiveFacet = require("dme/RestrictiveFacet");
+	// define and require a Model
+	var MyModel = require("./mymodel").Model;
 
-// define and require a Model
-var MyModel = require("./mymodel").Model;
+	// Create a new DataModel which contains all the models for this app.
+	var dataModel = new DataModel()
 
-// Create a new DataModel which contains all the models for this app.
-var dataModel = new DataModel()
+	// load in the default media handlers (js,html,text)
+	require("dme/media/");
 
-// load in the default media handlers (js,html,text)
-require("dme/media/");
+	//Create a Store that we want to back our model
+	var store = new SolrStore("products",{url: "http://localhost:8983/solr", primaryKey: "productId"});
 
-//Create a Store that we want to back our model
-var store = new SolrStore("products",{url: "http://localhost:8983/solr", primaryKey: "productId"});
-
-// instantiate the model passing in the store and any options
-var model = new MyModel(store,{});
+	// instantiate the model passing in the store and any options
+	var model = new MyModel(store,{});
 
 
-// instantiate a privilege facet 
-var publicFacet = new RestrictiveFacet({
-	query: function(query,opts){
-		query += "&eq(publicProduct,true)";
-		return this.model.query(query,opts);
-	}	
-});
+	// instantiate a privilege facet 
+	var publicFacet = new RestrictiveFacet({
+		query: function(query,opts){
+			query += "&eq(publicProduct,true)";
+			return this.model.query(query,opts);
+		}	
+	});
 
-// Add the new Model and Facets into the DataModel at "products"
-dataModel.set("products",model, {public: publicFacet});
+	// Add the new Model and Facets into the DataModel at "products"
+	dataModel.set("products",model, {public: publicFacet});
 
-/* 
-... app middleware ...
-*/
+	/* 
+	... app middleware ...
+	*/
 
-// Add in the DME engine middleware along with your other routes
-// It will claim /:products  and /resource  in this case
+	// Add in the DME engine middleware along with your other routes
+	// It will claim /:products  and /resource  in this case
 
-app.use(engine(dataModel))	 
-
+	app.use(engine(dataModel))	 
 ...
 
-Example Data Model
+
+##Example Data Model
 
 ...
-var Model = exports.Model = declare([ModelBase], {
-        primaryKey: "genome_id",
+	var Model = exports.Model = declare([ModelBase], {
+	        primaryKey: "genome_id",
 
-	// this is the base portion of the schema
-	// for a solr store the data schema is retrieved from solr
-	// and mixed in with the schema, the exposed models from the store and here
+		// this is the base portion of the schema
+		// for a solr store the data schema is retrieved from solr
+		// and mixed in with the schema, the exposed models from the store and here
 
-        schema: {
-                "description": "Example Schema"
-        },
+		schema: {
+	                "description": "Example Schema"
+		},
 
-        doSomething: function(foo /*string*/,bar /*bar*/ /*expose*/){
-
-        }
-});
+		doSomething: function(foo /*string*/,bar /*bar*/ /*expose*/){
+		}
+	});
 
 ...
