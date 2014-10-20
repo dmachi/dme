@@ -1,8 +1,0 @@
-
-#preprocess funcs:
-- query(dataModel,query)  - query dataModel with query.  The overall query is recursively walked, transforming queries into deferreds deepes
-
-#postprocess funcs
-- filter(query)  - queries the array of results with query (full set of js-array query operators are available here)
-
- 
