@@ -16,7 +16,6 @@ objects.
 
 ## Usage
 
-...
 
 	// get some modules
 	var app = module.exports =  express();
@@ -59,12 +58,10 @@ objects.
 	// It will claim /:products  and /resource  in this case
 
 	app.use(engine(dataModel))	 
-...
 
 
 ##Example Data Model
 
-...
 	var Model = exports.Model = declare([ModelBase], {
 	        primaryKey: "genome_id",
 
@@ -80,4 +77,3 @@ objects.
 		}
 	});
 
-...
