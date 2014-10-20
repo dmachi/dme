@@ -1,6 +1,6 @@
 {
   "name": "dme",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "DataModelEngine for Express 4.x",
   "author": "Dustin Machi <dmachi@dojotoolkit.org>",
   "keywords": [
@@ -26,6 +26,7 @@
     "rql": "~0.3.3",
     "fs-extra": "~0.12.0",
     "introspect": "0.0.3",
-    "solrjs": "~0.5.0"
+    "solrjs": "~0.5.0",
+    "debug": "~2.1.0"
   }
 }

@@ -1,3 +1,4 @@
+var debug = require("debug")("dme:model")
 var errors = require("./errors");
 var when = require("promised-io/promise").when;
 var defer = require("promised-io/promise").defer;
@@ -18,8 +19,10 @@ var Model = exports.Model= declare([EventEmitter],{
 	getSchema: function(){
 		if (this.generateSchema && this.store && this.store.getSchema){
 			if (!this._generatedSchema){
+				debug("Build Schema");
 				return this.buildSchema();
 			}else{
+				debug("_generatedSchema");
 				return this._generatedSchema;
 			}
 		}
@@ -28,6 +31,7 @@ var Model = exports.Model= declare([EventEmitter],{
 	},
 
 	buildSchema: function(){
+		debug("buildSchema");
                 var def = new defer();
                 var self=this;
                 when(this.store.getSchema(), function(schema){
@@ -63,7 +67,7 @@ var Model = exports.Model= declare([EventEmitter],{
 						parameters: []
 					}
 
-					//console.log("Expose Function: ", prop);
+					//debug("Expose Function: ", prop);
 					var svcParams = params.forEach(function(p,idx) { 
 						if (!p.match(/\/\*/)){
 							if (params[idx+1] && params[idx+1].match(/\/\*/) && params[idx+1]!="/*expose*/"){
@@ -77,7 +81,7 @@ var Model = exports.Model= declare([EventEmitter],{
 					});
 
 
-					//console.log("svcParams: ", svcParams);
+					//debug("svcParams: ", svcParams);
 				}	
 			}
 		}
@@ -93,7 +97,7 @@ var Model = exports.Model= declare([EventEmitter],{
 		if (!this.schema || !this.schema.properties) { throw Error("Missing Schema Properties"); }
 		Object.keys(this.schema.properties).forEach(function(prop){
 			var propDef = _self.schema.properties[prop];
-			//console.log("prop: ", prop, "propDef: ", propDef);
+			//debug("prop: ", prop, "propDef: ", propDef);
 			if (!prop || (prop=="id") || (typeof propDef=="function")) { return; }
 
 			if ((propDef.type=="readonly")&&(typeof object[prop]!="undefined")){
@@ -112,7 +116,7 @@ var Model = exports.Model= declare([EventEmitter],{
 			}else if (updated[prop]){
 				out[prop]=updated[prop];
 			}else{
-				//console.log("Property Not Defined: ", prop);
+				//debug("Property Not Defined: ", prop);
 			}
 
 			if (propDef['enum'] && updated[prop] && (propDef['enum'].indexOf(updated[prop])==-1)){
@@ -120,15 +124,15 @@ var Model = exports.Model= declare([EventEmitter],{
 			}
 			
 			if (propDef.type && out[prop]) {
-				//console.log("Check out[prop] as ", propDef.type, propDef, typeof out[prop]);
+				//debug("Check out[prop] as ", propDef.type, propDef, typeof out[prop]);
 				var udType = typeof out[prop];
 				
 				if (propDef.type=="date") {
-					//console.log("Date Property: ",prop, out[prop]);
+					//debug("Date Property: ",prop, out[prop]);
 					if (typeof out[prop]=="string"){
-						//console.log("Convert ISO String to Date Object");
+						//debug("Convert ISO String to Date Object");
 						out[prop]=new Date(Date.parse(out[prop]));
-						//console.log("Converted: ", out[prop]);
+						//debug("Converted: ", out[prop]);
 					}
 
 					if (!(out[prop].toISOString)){
@@ -186,7 +190,7 @@ var Model = exports.Model= declare([EventEmitter],{
 		_self.store.setSchema(schema);	
 	},
 	get: function(id,opts /*expose*/){
-		//console.log("Call Store Get: ", id, "store id", this.store.id);
+		//debug("Call Store Get: ", id, "store id", this.store.id);
 		return this.store.get(id,opts);
 	},
 	query: function(query, opts /*expose*/){

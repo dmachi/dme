@@ -1,3 +1,4 @@
+var debug = require("debug")("dme:store:solr");
 var solrjs = require("solrjs");
 var Deferred = require("promised-io/promise").defer;
 var All= require("promised-io/promise").all;
@@ -14,6 +15,7 @@ var Store = exports.Store = declare([StoreBase], {
 	primaryKey: "id",
 	realTimeGet: true,
 	init: function(){
+		debug("Creating solrjs client @ " + this.options.url + "/" + this.id);
 		this.client = new solrjs(this.options.url + "/" + this.id,{});
 		this.realTimeGet = this.options.realTimeGet || this.realTimeGet;	
 		if (this.options && this.options.queryHandlers){
@@ -22,6 +24,7 @@ var Store = exports.Store = declare([StoreBase], {
 
 	},
 	getSchema: function(){
+		debug("getSchema()");
 		var propProps = ["name","type","indexed"];
 		return when(this.client.getSchema(), function(response){
 			var schema = response.schema;

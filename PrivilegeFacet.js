@@ -1,3 +1,4 @@
+var debug = require("debug")("dme:facet");
 var errors = require("./errors");
 var when = require("promised-io/promise").when;
 var defer = require("promised-io/promise").defer;
@@ -22,11 +23,8 @@ module.exports = declare([],{
 	},
 	
 	init: function(){
-		console.log("Privilege Facet Init");
                 this._smd = this.model.getServiceDescription();
-		console.log("this._smd: ", this._smd);
                 var services = this._smd.services;
-
 		if (this.permissive) {
 	                Object.keys(services).forEach(function(method){
 				if (typeof this[method] == 'undefined'){
@@ -37,22 +35,21 @@ module.exports = declare([],{
 			},this);
 		}else{
 			Object.keys(services).forEach(function(method){
-				console.log("Checking Method: ", method);
+			
 				if (this[method] === true){
-					console.log("\tFound Method Enabled");
 					this[method] = function(){
 						return this.model[method].call(this.model, arguments);	
 					}
 				}else if (typeof this[method]=='function'){
-					console.log("\tFound Method Override Function");
 					var params = introspect(this[method])
+					//debug("Params: ", params);
 					if (params[params.length-1]=="/*expose*/") {
-						this.smd.services[method] = {
+						this._smd.services[method] = {
 							type: "method",
 							parameters: []
 						}
 
-						console.log("Expose Function: ", method);
+						//debug("Expose Function: ", method);
 						var svcParams = params.forEach(function(p,idx) { 
 							if (!p.match(/\/\*/)){
 								if (params[idx+1] && params[idx+1].match(/\/\*/) && params[idx+1]!="/*expose*/"){
@@ -65,16 +62,50 @@ module.exports = declare([],{
 							}
 						},this);
 	
-						console.log("svcParams: ", svcParams);
+						//debug("svcParams: ", svcParams);
 					}else{
-						console.warn("Facet Method Exists for " + method + "but does not include an /*exposed*/ comment");
+						//debug("Facet Method Exists for " + method + ", but does not include an /*exposed*/ comment");
 					}	
 				}else{
-					console.log("\tNot Found remove from Facet SMD");
+					debug("\tNot Found remove from Facet SMD: " + method);
 					delete services[method];
 				}
 			},this);
 		}
+
+			debug("Check for Facet Only Methods");
+                        for (var method in this){
+                                if (typeof this[method] == 'function') {
+                                        var params = introspect(this[method]);
+					console.log("Method: ", method, "Expose: ", params[params.length-1]=="/*exposed*/");
+                                        if (params[params.length-1]=="/*exposed*/") {
+						debug("Expose method: ", method, "params: ", params);	
+                                                this._smd.services[method] = {
+                                                        type: "method",
+                                                        parameters: []
+                                                }
+
+//                                                debug("Expose Function: ", method);
+                                                var svcParams = params.forEach(function(p,idx) {
+                                                        if (!p.match(/\/\*/)){
+                                                                if (params[idx+1] && params[idx+1].match(/\/\*/) && params[idx+1]!="/*expose*/"){
+                                                                        var type = params[idx+1].replace("/*","").replace("*/","");
+
+                                                                        this._smd.services[method].parameters.push({name: p, type: type});
+                                                                }else{
+                                                                        this._smd.services[method].parameters.push({name: p});
+                                                                }
+                                                        }
+                                                },this);
+
+                                                //debug("svcParams: ", svcParams);
+                                        }else{
+						//debug("Skipping Method: ", methodparams);
+					}
+                                }
+                        }
+
+
         },
 
 	use: function(model){
@@ -84,8 +115,10 @@ module.exports = declare([],{
 	},
 
         getSchema: function(){
+		debug("Facet getSchema()");
 		var self=this;
                 if (this.schema) {
+			debug("using manual/cached schema");
 			return this.schema;
 		}else {
 			return when(this.model.getSchema(), function(schema){
@@ -101,21 +134,26 @@ module.exports = declare([],{
 						
 				// 	object: { foo: {...}, bar: {...} } 	
 				if (self.properties && (self.properties != "*")) {
-				
+					debug("Mapping Schema Properties");	
 					Object.keys(schema.properties).forEach(function(prop){
 						if (self.properties instanceof Array) {
 							if (!self.properties.some(function(p){
 								return prop.match(p);	
 							})){
+								debug("Deleting " + prop + " from PrivilegeFacet");
 								delete schema.properties[prop];	
 							}
 						}else if (self.properties[prop] === false) {
+							debug("Deleting disabled " + prop + " from PrivilegeFacet");
 							delete schema.properties[prop];
 						}else if (self.properties[prop] === true ){
+							debug("Exposing " + prop + " in schema");
 							// don't do anyting just keep this property
 						}else if (self.properties[prop] && typeof self.properties[prop]=='object'){
+							debug("Exposed overridden properties for " + prop);
 							schema.properties[prop]=self.properties[prop];
 						}else if (!self.permissive){
+							console.log("Delete disallowed property " + prop);
 							delete schema.properties[prop];
 						}
 					});
@@ -124,7 +162,7 @@ module.exports = declare([],{
 				self.schema = schema;
 				return schema;
 			}, function(err){
-				console.log("Error Filtering properties in Facet schema",err);
+				debug("Error Filtering properties in Facet schema",err);
 				return;
 			});
 		}

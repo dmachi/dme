@@ -1,3 +1,4 @@
+var debug = require("debug")("dme");
 var express = require('express');
 var router = express.Router();
 var URL = require("url");
@@ -42,13 +43,13 @@ serializationMiddleware = [
 		if (res.results) {
 			res.media = findBestMedia(req.headers.accept || "text/json",res.results,{req:req,res:res});	
 			res.set("content-type",res.media['content-type']);
-			console.log("Serialize to ", res.media['content-type']);
+			debug("Serialize to ", res.media['content-type']);
 			var serialized = res.media.serialize(res.results, {req:req,res:res});
 			when(serialized, function(out) {
 				res.end(out);
 			});
 		}else{
-			console.log("No Results Found.");
+			debug("No Results Found.");
 			next("route");		
 		}
 	}
@@ -59,13 +60,26 @@ module.exports = function(dataModel){
 	router.use(middleware);
 
 	router.get('/resource/schema/:id', [
+                function(req,res,next){
+                        debug("req.apiPrivilegeFacet: ", req.apiPrivilegeFacet);
+                        debug("Model: ", req.params.id);
+
+                        if (req.apiPrivilegeFacet && req.apiPrivilegeFacet!="model" && dataModel.privilegeFacet[req.params.id] && dataModel.privilegeFacet[req.params.id][req.apiPrivilegeFacet]){
+                                req.schemaProvider = dataModel.privilegeFacet[req.params.id][req.apiPrivilegeFacet];
+                        }else {
+                                req.schemaProvider = dataModel.model[req.params.id];
+                        }
+
+                        next();
+                },
 		function(req,res,next){
 			req.templateId = "schema";
-			console.log("req.params: ", req.params);
+			debug("req.params: ", req.params);
 			if (req.params.id) {
 				var model = dataModel.model[req.params.id];
 				if (model) {
-					when(model.getSchema?model.getSchema():(model.schema||{id: req.params.id}),function(schema){
+					debug("Get Model Schema: " + req.params.id);
+					when(req.schemaProvider.getSchema(),function(schema){
 						res.results={results: schema, metadata:{}};
 						next();
 					}, function(err){
@@ -85,13 +99,20 @@ module.exports = function(dataModel){
 	router.get('/resource/schema', [
 		function(req,res,next){
 			req.templateId = "schema";
-			console.log("req.params: ", req.params);
 			req.templateStyle="list"
 			var schemas=[]
 
 			var defs = Object.keys(dataModel.model).map(function(modelId){
 				var model = dataModel.model[modelId];
-				return when(model.getSchema?model.getSchema():(model.schema||{id: req.params.id,target: "/" + modelId}),function(schema){
+                              	var schemaProvider;
+                                if (req.apiPrivilegeFacet && req.apiPrivilegeFacet!="model" && dataModel.privilegeFacet[modelId] && dataModel.privilegeFacet[modelId][req.apiPrivilegeFacet]){
+                                        schemaProvider = dataModel.privilegeFacet[modelId][req.apiPrivilegeFacet];
+                                }else {
+                                        schemaProvider = dataModel.model[modelId];
+                                }
+
+
+				return when(schemaProvider.getSchema(),function(schema){
 					schemas.push(schema);
 					return true;	
 				}, function(err){
@@ -114,7 +135,7 @@ module.exports = function(dataModel){
 				res.results={results: schema, metadata:{}};
 				next();
 			},function(err){
-				console.log("Error Retrieving Schema: ", err);
+				debug("Error Retrieving Schema: ", err);
 				next(err);
 			});
 		},
@@ -124,15 +145,12 @@ module.exports = function(dataModel){
 
 	router.get('/resource/smd/:id', [
 		function(req,res,next){
-			console.log("req.apiPrivilegeFacet: ", req.apiPrivilegeFacet);
-			console.log("Model: ", req.params.id);
-			console.log(" facets instance: ", dataModel.privilegeFacet[req.params.id], dataModel.privilegeFacet[req.params.id][req.apiPrivilegeFacet]);
+			debug("req.apiPrivilegeFacet: ", req.apiPrivilegeFacet);
+			debug("Model: ", req.params.id);
 
 			if (req.apiPrivilegeFacet && req.apiPrivilegeFacet!="model" && dataModel.privilegeFacet[req.params.id] && dataModel.privilegeFacet[req.params.id][req.apiPrivilegeFacet]){
-				console.log("SMD Provider (facet): ", req.params.id, req.apiPrivilegeFacet);
 				req.smdProvider = dataModel.privilegeFacet[req.params.id][req.apiPrivilegeFacet];
 			}else {
-				console.log("SMD Provider (model): ", req.params.id);
 				req.smdProvider = dataModel.model[req.params.id];
 			}
 
@@ -143,9 +161,7 @@ module.exports = function(dataModel){
 			if (req.params.id) {
 				var model = dataModel.model[req.params.id];
 				if (model) {
-					console.log("Get Service Description ", req.params.id);
 					when(req.smdProvider.getServiceDescription(),function(smd){
-						console.log("Service Description: ", smd);
 						smd.target = "/" + req.params.id;
 						res.results={results: smd, metadata:{}};
 						next();
@@ -166,7 +182,6 @@ module.exports = function(dataModel){
 	router.get('/resource/smd', [
 		function(req,res,next){
 			req.templateId = "smd";
-			console.log("req.params: ", req.params);
 			var SMD = {
 				transport: "RAW_POST",
 				envelope: "JSON-RPC-2.0",
@@ -193,7 +208,6 @@ module.exports = function(dataModel){
 			
 					Object.keys(SMD).forEach(function(key) { if (smds[modelId][key] == SMD[key]) { delete smds[modelId][key]; } });
 				
-					console.log("SMD Target: ", smd.target);	
 					return true;	
 				}, function(err){
 					return false;
@@ -215,7 +229,7 @@ module.exports = function(dataModel){
 				res.results={results: smd, metadata:{}};
 				next();
 			},function(err){
-				console.log("Error Retrieving SMD: ", err);
+				debug("Error Retrieving SMD: ", err);
 				next(err);
 			});
 		},
@@ -243,7 +257,7 @@ module.exports = function(dataModel){
 			req.templateId = req.apiModel;
 			req.templateStyle = 'list';
 			req.apiMethod="query";
-			console.log("req.query: ", req.query);
+			debug("req.query: ", req.query);
 			req.apiParams=req.query?[req.query]:[];
 			req.apiOptions = {};
 			next();
@@ -252,14 +266,13 @@ module.exports = function(dataModel){
 		serializationMiddleware
 	]);
 
-	console.log("bodyParser:", bodyParser);
 	router.post('/:model[/]',[
 		bodyParser.json({limit: 20000}),
 		function(req,res,next) {
 			req.apiModel = req.params.model;
 			if (req.body.jsonrpc){
 				req.headers.accept="application/json+jsonrpc";
-				console.log("req.body: ", JSON.stringify(req.body),req.headers);
+				debug("req.body: ", JSON.stringify(req.body),req.headers);
 				if (req.body.method) {
 					req.apiMethod=req.body.method;
 					req.apiParams = req.body.params || [];

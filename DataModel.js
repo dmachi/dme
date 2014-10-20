@@ -1,3 +1,4 @@
+var debug = require("debug")("dme:datamodel");
 var util = require("util");
 var events = require("events");
 var when = require("promised-io/promise").when;
@@ -24,15 +25,15 @@ function DataModel(options) {
 		if (req.apiMethod=="query"){
 
 			var model = self.model[req.apiModel];
-			console.log('self.model: ', self.model);
+			debug('self.model: ', self.model);
 			maxCount = model.maxLimit;
 
-			console.log("model.maxLimit: ", maxCount);
-			console.log("model.defaultLimit: ", model.defaultLimit);
+			debug("model.maxLimit: ", maxCount);
+			debug("model.defaultLimit: ", model.defaultLimit);
 
                         if (req.headers.range) {
                                 var range = req.headers.range.match(/^items=(\d+)-(\d+)?$/);
-				console.log("range: ", range, req.headers.range);
+				debug("range: ", range, req.headers.range);
                                 if (range) {
                                         start = range[1] || 0;
                                         end = range[2];
@@ -56,28 +57,28 @@ function DataModel(options) {
 					if (!requestedLimit) { requestedLimit=model.defaultLimit; }
 
 					req.limit = {count: requestedLimit, start: start}
-					console.log("req.limit: ", req.limit);
+					debug("req.limit: ", req.limit);
 				}
 			}
-			console.log("req.apiParams: ", req.apiParams);
+			debug("req.apiParams: ", req.apiParams);
 			var orig = req.apiParams[0] || "";
 			var query = Query(orig);
-			console.log("Limit Query Check: ", query, orig);
+			debug("Limit Query Check: ", query, orig);
 			
 			if (query.cache && query.cache.limit) {
-				console.log("Found Query Limit: ", query.limit);
+				debug("Found Query Limit: ", query.limit);
 				if (query.limit > maxCount) {
 					throw Error("Query Limit exceeds Max Limit");
 				}	
 			}else if (req.limit) {
-				console.log("Found Req.limit: ", req.limit);
+				debug("Found Req.limit: ", req.limit);
 				orig+= "&limit(" + req.limit.count+ "," + (req.limit.start?req.limit.start:0) + ")"; 
 			}else{
-				console.log("Adding default ", model.defaultLimit, " to query");
+				debug("Adding default ", model.defaultLimit, " to query");
 				orig+= "&limit(" + (model.defaultLimit || 25) + ")"; 
 			}
 			req.apiParams[0]=orig;
-			console.log("limit query: ", req.apiParams[0])
+			debug("limit query: ", req.apiParams[0])
 		}
 		next();
 	});
@@ -86,15 +87,15 @@ function DataModel(options) {
 	this.use(function(req,res,next){
 		var acl = req.apiPrivilegeFacet || "public";
 
-		console.log("Get Executor: ", acl, req.apiModel, req.apiMethod, req.apiParams);
+		debug("Get Executor: ", acl, req.apiModel, req.apiMethod, req.apiParams);
 		if (acl!="model" && self.privilegeFacet[req.apiModel] && self.privilegeFacet[req.apiModel][acl] && self.privilegeFacet[req.apiModel][acl][req.apiMethod]){
 			req.executor = function(params) {
-				console.log("call facet executor::", req.apiModel, acl, req.apiMethod, params);
+				debug("call facet executor::", req.apiModel, acl, req.apiMethod, params);
 				return self.privilegeFacet[req.apiModel][acl][req.apiMethod].apply(self.privilegeFacet[req.apiModel][acl], params);
 			}
 		}else if (self.model[req.apiModel][req.apiMethod]){
 			req.executor = function(params){
-				console.log("call model executor::", req.apiModel, acl, req.apiMethod, params);
+				debug("call model executor::", req.apiModel, acl, req.apiMethod, params);
 				return self.model[req.apiModel][req.apiMethod].apply(self.model[req.apiModel],params);
 			}
 		}else{
@@ -112,7 +113,7 @@ function DataModel(options) {
 			if (!(req.apiParams instanceof Array)){
 				req.apiParams = [req.apiParams];
 			}
-			console.log("req.apiParams: ", req.apiParams);
+			debug("req.apiParams: ", req.apiParams);
 			var results = req.executor(req.apiParams);
 			if (!results){
 				next("route");
@@ -120,13 +121,13 @@ function DataModel(options) {
 				when(results, function(results){
 					res.results = results;
 					if (req.apiMethod=="query" && results && results.metadata) {
-						console.log("Results.metadata: ", results.metadata);
+						debug("Results.metadata: ", results.metadata);
 						var start = parseInt(results.metadata.start || 0);
 						var end = start + results.results.length;
 						var tr = results.metadata.totalRows;
 	
 						var cr = "items " + start + "-" + end + "/" + tr; 
-						console.log("cr: ", cr);
+						debug("cr: ", cr);
 						res.set("Content-Range", cr);
 					}
 					next();
@@ -139,7 +140,7 @@ function DataModel(options) {
 			}
 
 		}catch(err){
-			console.log("Error Executing Model Method: ", err);
+			debug("Error Executing Model Method: ", err);
 			res.error=err;
 			next(err);
 		}
