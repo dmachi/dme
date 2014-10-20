@@ -1,14 +1,18 @@
 #Data Model Engine (DME)
 
-DME is an provide an API engine for ExpressJS (http://expressjs.com).
+DME is an provide an API engine for ExpressJS 4.x (http://expressjs.com).
 
 DME allows developers to define Models and PrivilegeFacets.  The DME middleware uses these
 to provide a REST API, JSON-Schema data definitions, and Service Mapping Descriptions (SMD).  By default,
 the standard REST Verbs (get, post, put, head, delete) are provided both directly and via JSON-RPC.  
+
 Additional Model methods may be exposed and are then available via JSON-RPC.  Both the Model's Schema and SMD
 are automatically generated based on a the Model and PrivilegeFacet.  PrivilegeFacets all different classes
 of users (e.g., public, user, admin) to be have different levels of access and visibility into the API and data 
 objects.  
+
+The previous version of DME was for ExpressJS 3.x.  The current one is under development and not all of the
+stores have yet been ported. 
 
 ## Installation
 
