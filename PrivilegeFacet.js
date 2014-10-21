@@ -77,7 +77,7 @@ module.exports = declare([],{
                         for (var method in this){
                                 if (typeof this[method] == 'function') {
                                         var params = introspect(this[method]);
-					console.log("Method: ", method, "Expose: ", params[params.length-1]=="/*exposed*/");
+					debug("Method: ", method, "Expose: ", params[params.length-1]=="/*exposed*/");
                                         if (params[params.length-1]=="/*exposed*/") {
 						debug("Expose method: ", method, "params: ", params);	
                                                 this._smd.services[method] = {
@@ -153,7 +153,7 @@ module.exports = declare([],{
 							debug("Exposed overridden properties for " + prop);
 							schema.properties[prop]=self.properties[prop];
 						}else if (!self.permissive){
-							console.log("Delete disallowed property " + prop);
+							debug("Delete disallowed property " + prop);
 							delete schema.properties[prop];
 						}
 					});
