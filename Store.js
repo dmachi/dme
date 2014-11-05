@@ -1,12 +1,13 @@
 var parser = require("rql/parser");
 var EventEmitter = require('events').EventEmitter;
-var util=require("util");
 var declare = require("dojo-declare/declare");
 
-var store = exports.Store = declare([EventEmitter], {
+var store = module.exports = declare([EventEmitter], {
 	constructor: function(id, options) { 
 		this.id = id;
-		this.options=options;
+		options = options || {}
+
+		Object.keys(options).forEach(function(key){ this[key]=options[key]; }, this);
 		this.init();
 	},
 	"setSchema":function(schema){

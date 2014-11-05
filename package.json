@@ -1,6 +1,6 @@
 {
   "name": "dme",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "DataModelEngine for Express 4.x",
   "author": "Dustin Machi <dmachi@dojotoolkit.org>",
   "keywords": [
@@ -27,6 +27,14 @@
     "fs-extra": "~0.12.0",
     "introspect": "0.0.3",
     "solrjs": "~0.5.0",
-    "debug": "~2.1.0"
+    "debug": "~2.1.0",
+    "express": ">4.0.0",
+    "body-parser": "~1.9.1",
+    "negotiator": "~0.4.9",
+    "media-typer": "~0.3.0",
+    "jayschema": "~0.3.1",
+    "uri-templates": "~0.1.5",
+    "range-parser": "~1.0.2",
+    "request": "~2.47.0"
   }
 }

@@ -1,0 +1,5 @@
+var JaySchema = require('jayschema');
+
+var SchemaRegistry = new JaySchema(JaySchema.loaders.http);
+
+exports.SchemaRegistry = SchemaRegistry;

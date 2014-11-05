@@ -1,0 +1,160 @@
+var debug = require("debug")("dme:middleware:model");
+var Path = require("path");
+var uriTemplate = require("uri-templates");
+var SchemaRegistry = require("../SchemaRegistry").SchemaRegistry;
+var Media = require("../media");
+var when = require('promised-io/promise').when;
+var defer = require("promised-io/promise").defer;
+var URL = require("url");
+var uriTemplate = require("uri-templates");	
+var rangeParser = require("range-parser");
+
+module.exports = [
+
+	function(req, res, next) {
+		debug("Get Model for URL: ", req.url)
+		debug("Get Specific Model: ", req.model);
+
+		req.model = req.DataModel.get(req.model);
+
+
+		if (!req.model || !req.url.match((req.model.pathStart||"/"))){
+			debug("req.model Not Found", req.model , " pathStartCheck:",!req.url.match((req.model.pathStart||"/")) )
+			return next("route");
+		}
+
+		debug("End Get Specific Model");
+		next();
+	},
+	function(req, res, next) {
+		debug("Begin Get Model Links")
+		var links = req.model.getLinks()
+		req.headers['content-type'] = req.headers['content-type'] || ((req.method == "POST" || req.method == "PUT") ? "application/json" : "application/x-www-form-urlencoded")
+
+		req.possibleLinks = links.filter(function(link) {
+
+			if (req.method.toLowerCase() != link.method.toLowerCase()) {
+				debug("Rejecting Link, method mismatch");
+				return false;
+			}
+
+	
+			if (!link.encType) {
+				if (link.method=="POST" || link.method=="PUT"){
+					link.encType="application/json";
+				}else{
+					link.encType= "application/x-www-form-urlencoded";
+				}
+			}
+
+			if (link.encType && (req.headers['content-type'] != link.encType)) {
+				debug("FAILED to match link.encType<->content-type: ", req.headers['content-type'], link.encType);
+				return false;
+			}
+		
+			var matches = (!link.path)?true:req._parsedUrl.href.replace((req.model.pathStart),"").match(link.path)
+		
+			if (!matches && link.rel=="self") {
+				return false;
+			}
+
+			return true;
+		})
+		debug("req.possibleLinks", req.possibleLinks)
+		next()
+	},
+	function(req,res,next){
+		
+		function checkMedia(req,res,next){
+			debug("Check Media", req.possibleLinks)
+			if (!req.possibleLinks || req.possibleLinks.length<1) { throw new Error("Unknown Media Type")}
+			var link;
+
+			if (req.possibleLinks && req.possibleLinks.length>0){
+				link = req.possibleLinks.shift();
+			}
+
+			var input;
+			var skipValidation=false;
+
+			if (link.path){
+				debug(" Checking link", req._parsedUrl.href.replace((req.model.pathStart),""), " against ", link.path)
+				var matches = (!link.path)?true:req._parsedUrl.href.replace((req.model.pathStart),"").match(link.path)
+				debug("Matches:",matches, " rel ", link.rel)
+				if (matches || (!matches && (link.rel!="self" && !link.rel.match("^get")))) {/* && matches[1]){*/
+					debug("Using Unmatched Link", link.rel)
+					req.matchedLink = link;
+					req.params=[matches&&matches[1]?matches[1]:""];
+					next()
+				}else{
+					if (req.possibleLinks.length>0){
+						return checkMedia(req,res);
+					}else{
+						next("route");
+					}					
+				}
+			}else{
+
+				if (req.possibleLinks.length>0){
+					return checkMedia(req,res);
+				}else{
+					next("route");
+				}
+			}
+		}
+		debug("call CheckMedia()");
+		checkMedia(req,res,next);
+	},
+
+	function(req, res, next) {
+		debug("Begin Get Interface Method from req.link", req.matchedLink)
+		if (req.matchedLink) {
+			var link = req.matchedLink;
+			req.interfaceMethod = link.method.toLowerCase();
+
+			// debug("req.method", req.method, req.interfaceMethod)
+
+			if ((req.method == "GET") && (link.rel == "self")) {
+				req.interfaceMethod = "get"
+			}else{
+				req.interfaceMethod = link.rel;
+			}
+
+			debug("End Get Interface Method: ", req.interfaceMethod)
+			next();
+			return;
+		}
+		debug("No Matched Links: ", req.url)
+		
+		next("route");
+	},
+	function(req,res,next){
+			var range = req.range(/*req.model.maxLimit||1000*/);
+			if (range && range[0]){
+					var count = range[0].end - range[0].start
+					if (count && (req.interfaceMethod.match("^query") || req.interfaceMethod.match("^search"))){
+						req.params[0] = req.params[0] += "&limit(" + count + "," + (range[0].start) + ")";
+					}
+			}else if (req.interfaceMethod=="query"){
+				req.params[0]=req.params[0] += "&limit(" + (req.model.maxLimit||25) + "0)";
+			}
+			next();
+	},
+	function(req,res,next){
+		debug("Executing", req.interfaceMethod, req.params)
+		if (!req.model || !req.model[req.interfaceMethod]){
+			console.error("Model Method not found", req.interfaceMethod);
+		}
+		debug("Execution Param (sans options): ", req.params);
+		req.params.push({req: req,res:res});
+
+		var modelResponse = req.model[req.interfaceMethod].apply(req.model,req.params)
+		when(modelResponse, function(mr){
+			// debug("Model Response:", mr)
+			if (!mr) {  next(new Error("None")); return; }
+			res.body = mr.results;
+			res.metadata = mr.metadata;
+			next();
+		});
+	}
+]

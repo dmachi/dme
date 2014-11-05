@@ -1,12 +1,44 @@
 var MediaHandlers=[];
 var debug = require("debug")("dme:media");
+var typer = require("media-typer");
+var Negotiator = require("negotiator");
+
 
 module.exports.addMedia = function(media){
-	debug("Add Media: ", media, typeof media);
 	MediaHandlers.push(media)
 }
 
-module.exports.findBestMedia = function(type,results,options){
+module.exports.getMediaTypes = function(){
+	return MediaHandlers.map(function(mt){
+		return mt["content-type"];
+	})
+}
+
+module.exports.getMediaType = function(type){
+	var last;
+	if(MediaHandlers.some(function(mt){
+		if (mt['content-type']==type){
+			last=mt;
+			return true;
+		}
+		return false;
+	})){ return last}
+	throw Error("Invalid Media Type: " + type);
+}
+
+module.exports.getBestMediaType = function(type,results,options){
+	debug("getBestMediaType()", type);
+
+	var negotiator = new Negotiator({headers:{accept:type}});
+	debug("Negotiator: ", negotiator, "Ctor:", Negotiator);
+	var mediaTypes = module.exports.getMediaTypes();
+	debug("Available Media Types: ", mediaTypes)
+	var mediaType = negotiator.mediaType(mediaTypes);
+	debug("MediaType: ", mediaType)
+	return module.exports.getMediaType(mediaType);
+}
+
+module.exports.findBestMediaold = function(type,results,options){
 	var parts= type.split(";");
 	var accepts = {};
 	parts.forEach(function(acc){

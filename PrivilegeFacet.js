@@ -23,6 +23,17 @@ module.exports = declare([],{
 	},
 	
 	init: function(){
+				if (!this.model) {
+					console.log("PrivilegeFacet Init missing Model")
+
+					return;
+				}
+
+				if (!this.model.getServiceDescription){
+					console.log("Unalbe to get Service Description", this.model)
+					return;
+				}
+
                 this._smd = this.model.getServiceDescription();
                 var services = this._smd.services;
 		if (this.permissive) {
