@@ -135,7 +135,7 @@ module.exports = [
 						req.params[0] = req.params[0] += "&limit(" + count + "," + (range[0].start) + ")";
 					}
 			}else if (req.execMethod=="query"){
-				req.params[0]=req.params[0] += "&limit(" + (req.model.maxLimit||25) + "0)";
+				req.params[0]=req.params[0] += "&limit(" + (req.model.maxLimit||25) + ",0)";
 			}
 			debug("post limit req.params[0]", req.params[0]);
 			next();
