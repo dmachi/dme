@@ -26,7 +26,7 @@
     "rql": "~0.3.3",
     "fs-extra": "~0.12.0",
     "introspect": "0.0.3",
-    "solrjs": "~0.5.0",
+    "solrjs": "~0.5.2",
     "debug": "~2.1.0",
     "express": ">4.0.0",
     "body-parser": "~1.9.1",
