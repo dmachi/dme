@@ -21,7 +21,8 @@ addMedia({
 	;		
 
 			debug("Specific Template: ", specificTemplate);
-			res.render(specificTemplate,{results: obj,metadata: res.metadata, request:req},function(err,html){
+			debug("Request.production: ", req.production);
+			res.render(specificTemplate,{results: obj,metadata: res.metadata, request:req, response:res},function(err,html){
 				if (err) {
 					debug("Error Rendering HTML Template: ", err);
 					// debug("Rendering Template as: ", req.templateId + (req.templateStyle?("-"+req.templateStyle):""));

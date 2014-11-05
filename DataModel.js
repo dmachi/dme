@@ -10,7 +10,6 @@ var Query = require("rql/query").Query;
 var Model = require("./model");
 var fs = require("fs-extra");
 var Request = require('request');
-var Model = require("./Model");
 var express = require('express');
 var mw = require("./middleware");
 var Path = require("path");
