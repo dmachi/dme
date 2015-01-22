@@ -32,7 +32,9 @@ var middleware = [
 		next();
 	},
 	function(req,res,next){
-		req.apiPrivilegeFacet="public";
+		if (!req.apiPrivilegeFacet) {
+			req.apiPrivilegeFacet="public";
+		}
 		next();
 	}
 ]
@@ -260,6 +262,7 @@ module.exports = function(dataModel){
 			debug("req.query: ", req.query);
 			req.apiParams=req.query?[req.query]:[];
 			req.apiOptions = {};
+			console.log("Query /:model/", req.params.model, req.templateId, req.templateStyle, req.apiParams);
 			next();
 		},
 		dataModel.middleware,

@@ -173,36 +173,39 @@ module.exports = declare([],{
 	},
 
         get: function(id,opts /*expose*/){
+		console.log("PrivilegeFacet get()", id);
+		
 		if (this.permissive) {
-	                return this.model.get.call(this.model,arguments);
+	                return this.model.get(id,opts);
 		}
 		throw new Error("Not Allowed");
         },
 
         query: function(query, opts /*expose*/){
+		console.log("Privilege Facet query: ", query);
 		if (this.permissive) {
-                	return this.model.query.call(this.model,arguments);
+                	return this.model.query(query,opts);
 		}
 		throw new Error("Not Allowed");
         },
 
         put: function(obj, opts /*expose*/){
 		if (this.permissive) {
-                	return this.model.put.call(this.model,arguments);
+                	return this.model.put(obj,opts);
 		}
 		throw new Error("Not Allowed");
         },
 
         post: function(obj, opts /*expose*/){
 		if (this.permissive) {
-	                return this.model.post.call(this.model,arguments);
+	                return this.model.post(obj,opts);
 		}
 		throw new Error("Not Allowed");
         },
 
         'delete': function(id, opts /*expose*/){
 		if (this.permissive) {
-	                return this.model['delete'].call(this.model,arguments);
+	                return this.model['delete'](id,opts);
 		}
 		throw new Error("Not Allowed");
         }

@@ -88,12 +88,20 @@ function DataModel(options) {
 		var acl = req.apiPrivilegeFacet || "public";
 
 		debug("Get Executor: ", acl, req.apiModel, req.apiMethod, req.apiParams);
+		console.log("Priv Facet: ", acl, "self.privilegeFacet[req.apiModel] exists ", !!self.privilegeFacet[req.apiModel][acl], "method type: ", typeof self.privilegeFacet[req.apiModel][acl][req.apiMethod] );
+		console.log((typeof self.privilegeFacet[req.apiModel][acl][req.apiMethod]== "boolean" )?("Boolean Facet Method: " + self.privilegeFacet[req.apiModel][acl][req.apiMethod]):"");
 		if (acl!="model" && self.privilegeFacet[req.apiModel] && self.privilegeFacet[req.apiModel][acl] && self.privilegeFacet[req.apiModel][acl][req.apiMethod]){
 			req.executor = function(params) {
-				debug("call facet executor::", req.apiModel, acl, req.apiMethod, params);
-				return self.privilegeFacet[req.apiModel][acl][req.apiMethod].apply(self.privilegeFacet[req.apiModel][acl], params);
+				debug("call facet executor::", req.apiModel, acl, req.apiMethod, params );
+				console.log(self.privilegeFacet[req.apiModel][acl]);
+				if (self.privilegeFacet[req.apiModel][acl][req.apiMethod] && typeof self.privilegeFacet[req.apiModel][acl][req.apiMethod]=="function"){
+					return self.privilegeFacet[req.apiModel][acl][req.apiMethod].apply(self.privilegeFacet[req.apiModel][acl], params);
+				}else{
+					console.log("Call Model Executor because of boolean privilege facet prop");
+					return self.model[req.apiModel][req.apiMethod].apply(self.model[req.apiModel],params);	
+				}
 			}
-		}else if (self.model[req.apiModel][req.apiMethod]){
+		}else if ((!acl || acl=="model") && self.model[req.apiModel][req.apiMethod]){
 			req.executor = function(params){
 				debug("call model executor::", req.apiModel, acl, req.apiMethod, params);
 				return self.model[req.apiModel][req.apiMethod].apply(self.model[req.apiModel],params);
@@ -108,17 +116,25 @@ function DataModel(options) {
 
 	// execute req.executor
 	this.use(function(req,res,next){
+		debug("Execute req.executor");
 		//var opts = {req:req, res:res};
 		try {
 			if (!(req.apiParams instanceof Array)){
 				req.apiParams = [req.apiParams];
 			}
 			debug("req.apiParams: ", req.apiParams);
+			if (!req.executor) {
+				debug("Invalid Executor");
+				return next(new Error("Not Found"));
+			}
+			debug("Call Executor");
 			var results = req.executor(req.apiParams);
-			if (!results){
-				next("route");
-			}else{
+//			if (!results){
+//				next("route");
+//			}else{
+			console.log("Results: ", results);
 				when(results, function(results){
+					console.log("results: ", results);
 					res.results = results;
 					if (req.apiMethod=="query" && results && results.metadata) {
 						debug("Results.metadata: ", results.metadata);
@@ -137,7 +153,7 @@ function DataModel(options) {
 					res.error = err;
 					next(err);
 				});
-			}
+//			}
 
 		}catch(err){
 			debug("Error Executing Model Method: ", err);

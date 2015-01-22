@@ -190,7 +190,7 @@ var Model = exports.Model= declare([EventEmitter],{
 		_self.store.setSchema(schema);	
 	},
 	get: function(id,opts /*expose*/){
-		//debug("Call Store Get: ", id, "store id", this.store.id);
+		debug("Call Store Get: ", id, "store id", this.store.id);
 		return this.store.get(id,opts);
 	},
 	query: function(query, opts /*expose*/){
