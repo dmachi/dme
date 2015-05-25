@@ -251,22 +251,25 @@ DME.prototype.getMiddleware=function(opts) {
                         next()
                 },
 */
-		//check auth and choose the correct facet for this request
-		function(req,res,next){
+                function(req,res,next){
 
-			if (req.isAuthenticated && req.isAuthenticated()){
+                        console.log("Check Authentication Status", req.isAuthenticated || req.isAuthenticated());
+                        var authed = req.isAuthenticated || req.isAuthenticated();
+                        if (authed){
+                                if (req.user && req.user.isAdmin){
+                                        console.log("ADMIN FACET");
+                                        req.facet = req.facet["admin"];
+                                }else{
+                                        console.log("USER FACET");
+                                        req.facet = req.facet["user"];
+                                }
+                        }else{
+                                console.log("Not Authenticated");
+                                req.facet = req.facet["public"];
+                        }
 
-				if (req.user && req.user.isAdmin){
-					req.facet = req.facet["admin"];
-				}else{
-					req.facet = req.facet["user"];
-			}
-			}else{
-				req.facet = req.facet["public"];
-			}
-	
-			next();
-		},
+                        next();
+                },
 
 		function(req,res,next){
 			//console.log("Check Store Method");
