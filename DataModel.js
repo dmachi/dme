@@ -86,12 +86,13 @@ function DataModel(options) {
 	// get the executor
 	this.use(function(req,res,next){
 		var acl = req.apiPrivilegeFacet || "public";
-
+		var opts = {req: req, res: res}
 		debug("Get Executor: ", acl, req.apiModel, req.apiMethod, req.apiParams);
 		console.log("Priv Facet: ", acl, "self.privilegeFacet[req.apiModel] exists ", !!self.privilegeFacet[req.apiModel][acl], "method type: ", typeof self.privilegeFacet[req.apiModel][acl][req.apiMethod] );
 		console.log((typeof self.privilegeFacet[req.apiModel][acl][req.apiMethod]== "boolean" )?("Boolean Facet Method: " + self.privilegeFacet[req.apiModel][acl][req.apiMethod]):"");
 		if (acl!="model" && self.privilegeFacet[req.apiModel] && self.privilegeFacet[req.apiModel][acl] && self.privilegeFacet[req.apiModel][acl][req.apiMethod]){
 			req.executor = function(params) {
+				params.push(opts);
 				debug("call facet executor::", req.apiModel, acl, req.apiMethod, params );
 				console.log(self.privilegeFacet[req.apiModel][acl]);
 				if (self.privilegeFacet[req.apiModel][acl][req.apiMethod] && typeof self.privilegeFacet[req.apiModel][acl][req.apiMethod]=="function"){
@@ -103,6 +104,7 @@ function DataModel(options) {
 			}
 		}else if ((!acl || acl=="model") && self.model[req.apiModel][req.apiMethod]){
 			req.executor = function(params){
+				params.push(opts);
 				debug("call model executor::", req.apiModel, acl, req.apiMethod, params);
 				return self.model[req.apiModel][req.apiMethod].apply(self.model[req.apiModel],params);
 			}

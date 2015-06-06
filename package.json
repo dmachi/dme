@@ -1,6 +1,6 @@
 {
   "name": "dme",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "DataModelEngine for Express 4.x",
   "author": "Dustin Machi <dmachi@dojotoolkit.org>",
   "keywords": [
