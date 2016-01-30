@@ -1,7 +1,7 @@
 {
   "name": "dme",
   "description": "Data Model Engine for Express",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "author": {
     "name": "Dustin Machi",
     "email": "dmachi@dojotoolkit.org"
@@ -36,7 +36,7 @@
     "randomstring":"*",
     "dojo-declare":"*",
     "promised-io":"*",
-    "mongodb":"1.4.28",
+    "mongodb":"2.1.4",
     "node-uuid":"*",
     "mime":"*"
   }
