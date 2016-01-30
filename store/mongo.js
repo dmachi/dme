@@ -13,7 +13,6 @@ var declare = require("dojo-declare/declare");
 var Store = exports.Store=declare([StoreBase], {
 	init:  function(){
 		var _self=this;
-		//console.log("this.options: ", this.options);
 		if (!this.options.auth.url){
 			throw new Error("No Connection URL Provided to Data Model");
 		}	
@@ -23,7 +22,6 @@ var Store = exports.Store=declare([StoreBase], {
 			if (err) { console.log("Error connecting to ", _self.id, " Data Store", err);def.reject(err);return}
 			_self.db = db;	
 			_self.collection = db.collection(_self.id);
-			console.log("MongoDB Store Collection: ", _self.id);	
 			def.resolve(true);
 		});
 		this.connectDeferred = def.promise;
@@ -238,9 +236,9 @@ var Store = exports.Store=declare([StoreBase], {
 		var totalCountPromise = new defer();
 
 
-		console.log("get collection search count, ",search);
+		//console.log("get collection search count, ",search, "Collection: ", this.collection);
 		this.collection.count(search, function(err,totalCount){
-			console.log("mongo returned totalCount",totalCount);
+			//console.log("mongo returned totalCount",totalCount);
 			if (err) { console.log("collection count error: ", err); totalCount=0; totalCountPromise.reject(err);return; }
 			//console.log("count() totalCount: ", totalCount);
 			totalCount -= meta.lastSkip;
@@ -249,13 +247,18 @@ var Store = exports.Store=declare([StoreBase], {
 			if (meta.lastLimit < totalCount)
 				totalCount = meta.lastLimit;
 			// N.B. just like in rql/js-array
+			console.log("Resolve Total Count", totalCount);
 			totalCountPromise.resolve(Math.min(totalCount, typeof meta.totalCount === "number" ? meta.totalCount : Infinity));
 		})
 
 		//console.log("do search: ", search, meta);	
+		if (meta.limit < 0 || meta.limit == Infinity){
+			meta.limit=0;
+		}
+
 		this.collection.find(search, meta, function(err, cursor){
 			if (err) return deferred.reject(err);
-	//		console.log("cursor: ", cursor, cursor.count());
+			//console.log("cursor: ", cursor, cursor.count());
 			/*
 			if (!cursor || cursor.count<1){
 				def.resolve([]);
@@ -274,9 +277,9 @@ var Store = exports.Store=declare([StoreBase], {
 			}
 */
 			cursor.toArray(function(err, results){
-	
-				if (err) {console.log("solr store find error: ", err); return deferred.reject(err);}
-				//console.log("solr store initial results: ", results);
+		
+				if (err) {console.log("mongodb store find error: ", err); return deferred.reject(err);}
+				//console.log("mongodb store initial results: ", results);
 				// N.B. results here can be [{$err: 'err-message'}]
 				// the only way I see to distinguish from quite valid result [{_id:..., $err: ...}] is to check for absense of _id
 				if (results && results[0] && results[0].$err !== undefined && results[0]._id === undefined) {
@@ -292,8 +295,6 @@ var Store = exports.Store=declare([StoreBase], {
 				if (fields) {
 					// unhash objects to arrays
 					if (meta.unhash) {
-						console.log("unhash fields: ", fields);
-						console.log('results: ', results);
 						//results = jsArray.executeQuery('values('+fields+')', {}, results);
 						results = results.map(function(r){
 							var values=Object.keys(r).filter(function(key){
@@ -304,23 +305,20 @@ var Store = exports.Store=declare([StoreBase], {
 							if (values.length==1){ return values[0]; }
 							return values;
 						});
-						console.log("unhashed results: ",results);	
 					}
 				}
 				// total count
 				when(totalCountPromise, function(result){
-					console.log("when totalCountPromise");
 					results.count = results.length;
 					results.start = meta.skip;
 					results.end = meta.skip + results.count;
 					results.schema = _self.schema.id; //schema;
 					results.totalCount = result;
-					console.log('ESULTS:', results.slice(0,0));
 					deferred.resolve(results);
 				});
 			});
 		});
-		return deferred;
+		return deferred.promise;
 	},
 
 	put: function(obj, options){
@@ -342,7 +340,10 @@ var Store = exports.Store=declare([StoreBase], {
 */
 			this.collection.findAndModify({id: obj.id},[],{$set: obj}, {safe:true,upsert:true,"new":true}, function(err,obj){
 				if (err) {def.reject(err); return;}
-				def.resolve(obj);	
+				obj=obj.value || obj;
+	                        _self.get(obj.id).then(function(o){
+       	                	       def.resolve(o);
+       				});
 			});	
 			return def.promise;
 		}
@@ -386,9 +387,7 @@ var Store = exports.Store=declare([StoreBase], {
 		if (obj._id) { delete obj._id; }
 		//console.log("MONGO UPDATE: ", obj.id, upd);
 		this.collection.findAndModify({id: obj.id},[],{$set:upd},{multi:false,safe:true}, function(err, resp){
-			//console.log("findAndModify Results: ", arguments);		
 			if (err){
-				//console.log("MONGO UPDATE ERROR: ", err);
 				def.reject(err);
 			}
 			_self.get(obj.id).then(function(o){
