@@ -19,7 +19,6 @@ var Store = exports.Store= declare([StoreBase], {
 	},
 
 	get: function(id,opts){
-		console.log("get() this: ", this, id);
 		return this.send(this.id, "get", id)
 	},
 
@@ -53,43 +52,43 @@ var Store = exports.Store= declare([StoreBase], {
 	query: function(query,opts){
 		if ((query && typeof query != "string") || !query) {
 			if (!opts && !opts.req && !opts.req.originalQuery){
-				console.log("query issue opts.req: ", opts.req);
 				query="";
 			}else{
 				query = unescape(opts.req.originalQuery);
 			}
 		}
 
-		if (opts && opts.req && opts.req.headers) {
-			console.log("** Query Headers: ", opts.req.headers);
-		}
+//		if (opts && opts.req && opts.req.headers) {
+//			console.log("** Query Headers: ", opts.req.headers);
+//		}
 		query = query?escape(query):"";
 
 		if (opts && opts.req && opts.req.limit) {
-			console.log("message store req.limit: ", opts.req.limit);
+			//console.log("message store req.limit: ", opts.req.limit);
 		}
 
-		console.log('sending query FROM message store: ', query);
-		console.log("MessageSotre this.id: ", this.id);
+		//console.log('sending query FROM message store: ', query);
+		//console.log("MessageSotre this.id: ", this.id);
                 return when(this.send(this.id, "query", query), function(results){
-                        console.log("Message Store Query Results: ", results);
-                        console.log("Query Results Len: ", results.count, "count: ", results.count, "totalCount: ", results.totalCount);
+                        //console.log("Message Store Query Results: ", results);
+                        //console.log("Query Results Len: ", results.count, "count: ", results.count, "totalCount: ", results.totalCount);
                         //console.log("Result Keys: ", Object.keys(results).join(","));
                         var start = results.start || 0;
                         var end = start + results.count;
 
                         //if (opts && opts.req && opts.req.headers && opts.req.headers.range){ 
                         var r =  "items " + start + "-" + end + "/" + results.totalCount;
-                        console.log("content-range: ", r);
+                        //console.log("content-range: ", r);
                         if (opts && opts.res) {
                                 opts.res.set("content-range",r);
                         }
-                        return results.data;
+			//console.log("returning from store.query: ", results);
+                        //return results.data;
+                        return results.data || results;
                 });
 	},
 
 	post: function(obj,opts){
-		console.log("Message Store Post: ", obj);
 		var safeOpts={};
 		Object.keys(opts).forEach(function(key){
 			if (key=="res") { return; }
