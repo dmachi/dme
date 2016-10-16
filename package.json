@@ -2,7 +2,10 @@
   "name": "dme",
   "version": "2.0.5",
   "description": "DataModelEngine for Express 4.x",
-  "author": "Dustin Machi <dmachi@dojotoolkit.org>",
+  "author": {
+    "name": "Dustin Machi",
+    "email": "dmachi@dojotoolkit.org"
+  },
   "keywords": [
     "data model",
     "engine",
@@ -22,12 +25,22 @@
   },
   "license": "BSD-2-Clause",
   "dependencies": {
+    "body-parser": "^1.15.2",
     "bson": "^0.2.17",
     "debug": "~2.1.0",
+    "express": "^4.14.0",
     "fs-extra": "~0.12.0",
     "introspect": "0.0.3",
     "promised-io": "~0.3.4",
     "rql": "~0.3.3",
     "solrjs": "~0.5.0"
-  }
+  },
+  "readme": "#Data Model Engine (DME)\n\nDME is an provide an API engine for ExpressJS 4.x (http://expressjs.com).\n\nDME allows developers to define Models and PrivilegeFacets.  The DME middleware uses these\nto provide a REST API, JSON-Schema data definitions, and Service Mapping Descriptions (SMD).  By default,\nthe standard REST Verbs (get, post, put, head, delete) are provided both directly and via JSON-RPC.  \n\nAdditional Model methods may be exposed and are then available via JSON-RPC.  Both the Model's Schema and SMD\nare automatically generated based on a the Model and PrivilegeFacet.  PrivilegeFacets all different classes\nof users (e.g., public, user, admin) to be have different levels of access and visibility into the API and data \nobjects.  \n\nThe previous version of DME was for ExpressJS 3.x.  The current one is under development and not all of the\nstores have yet been ported. \n\n## Installation\n\n- npm install dme\n\n## Usage\n\n\n\t// get some modules\n\tvar app = module.exports =  express();\n\tvar DataModel = require(\"dme/DataModel\");\n\tvar engine = require(\"dme\");\n\tvar RestrictiveFacet = require(\"dme/RestrictiveFacet\");\n\n\t// define and require a Model\n\tvar MyModel = require(\"./mymodel\").Model;\n\n\t// Create a new DataModel which contains all the models for this app.\n\tvar dataModel = new DataModel()\n\n\t// load in the default media handlers (js,html,text)\n\trequire(\"dme/media/\");\n\n\t//Create a Store that we want to back our model\n\tvar store = new SolrStore(\"products\",{url: \"http://localhost:8983/solr\", primaryKey: \"productId\"});\n\n\t// instantiate the model passing in the store and any options\n\tvar model = new MyModel(store,{});\n\n\n\t// instantiate a privilege facet \n\tvar publicFacet = new RestrictiveFacet({\n\t\tquery: function(query,opts){\n\t\t\tquery += \"&eq(publicProduct,true)\";\n\t\t\treturn this.model.query(query,opts);\n\t\t}\t\n\t});\n\n\t// Add the new Model and Facets into the DataModel at \"products\"\n\tdataModel.set(\"products\",model, {public: publicFacet});\n\n\t/* \n\t... app middleware ...\n\t*/\n\n\t// Add in the DME engine middleware along with your other routes\n\t// It will claim /:products  and /resource  in this case\n\n\tapp.use(engine(dataModel))\t \n\n\n##Example Data Model\n\n\tvar Model = exports.Model = declare([ModelBase], {\n\t        primaryKey: \"genome_id\",\n\n\t\t// this is the base portion of the schema\n\t\t// for a solr store the data schema is retrieved from solr\n\t\t// and mixed in with the schema, the exposed models from the store and here\n\n\t\tschema: {\n\t                \"description\": \"Example Schema\"\n\t\t},\n\n\t\tdoSomething: function(foo /*string*/,bar /*bar*/ /*expose*/){\n\t\t}\n\t});\n\n",
+  "readmeFilename": "README.md",
+  "gitHead": "311efd082ec9093123096948528b6649db33ecfa",
+  "homepage": "https://github.com/dmachi/dme",
+  "_id": "dme@2.0.5",
+  "_shasum": "bbb82a966fe18ea21f75cf5b800be308bfa38696",
+  "_from": "../../Users/dmachi/work/dme",
+  "_resolved": "file:../../Users/dmachi/work/dme"
 }

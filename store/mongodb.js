@@ -110,18 +110,6 @@ var Store = module.exports= declare([StoreBase], {
 				});
 			});
 
-/*
-
-		collection.find(query).toArray(function(err,docs){
-			console.log('docs: ', docs);
-			docs = docs.map(function(d){
-				delete d._id;
-				return d;
-			});
-			def.resolve({results:docs, metadata:{}});
-		});
-*/
-
 		return deferred.promise;
 	},
 
@@ -135,7 +123,10 @@ var Store = module.exports= declare([StoreBase], {
 	//	console.log("get query: ", query);
 		collection.find(query).toArray(function(err,docs){
 	//		console.log("get docs: ", docs);
-			if (docs[0]) { delete docs[0]._id; return def.resolve(docs[0]); }
+			if (docs[0]) { 
+				delete docs[0]._id; 
+				return def.resolve( {results: docs[0], metadata: {}});
+			}
 			def.reject();
 		});
 		return def.promise;
@@ -143,9 +134,11 @@ var Store = module.exports= declare([StoreBase], {
 
 	post: function(obj, opts){
 		console.log("mongodb store post");
-		return when(this.put(obj,opts),function(obj){
+		return when(this.put(obj,opts),function(results){
+			var obj = results.results;
 			console.log("store post() put() res: ", obj);
-			return obj;
+			//return obj;
+			return {results: obj,metadata:{}};
 		});
 	},
 
@@ -169,7 +162,7 @@ var Store = module.exports= declare([StoreBase], {
                                                         // .insert() returns array, we need the first element
                                                         obj = obj && obj[0];
                                                         if (obj) delete obj._id;
-                                                        deferred.resolve(obj);
+                                                        deferred.resolve({results: obj,metadata:{}});
                                                 });
                                         } else {
                                                 deferred.reject(id + " exists, and can't be overwritten");
@@ -181,7 +174,7 @@ var Store = module.exports= declare([StoreBase], {
 				console.log("colleciton.update Put Results: ", obj);
 				if (err) return deferred.reject(err);
 				if (obj) delete obj._id;
-				deferred.resolve(obj);
+				deferred.resolve({results: obj, metadata:{}});
 			});
 		}
 

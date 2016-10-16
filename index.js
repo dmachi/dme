@@ -269,9 +269,12 @@ module.exports = function(dataModel){
 		serializationMiddleware
 	]);
 
+
 	router.post('/:model[/]',[
+		bodyParser.json({limit: 20000, type: "application/jsonrpc+json"}),
 		bodyParser.json({limit: 20000}),
 		function(req,res,next) {
+			console.log("DME post /:model/", req.body);	
 			req.apiModel = req.params.model;
 			if (req.body.jsonrpc){
 				req.headers.accept="application/json+jsonrpc";
@@ -288,6 +291,8 @@ module.exports = function(dataModel){
 				req.apiParams = req.body;
 				req.apiOptions = {};
 			}
+
+			console.log("req.apiParams: ", req.apiParams, "is Array: ", req.apiParams instanceof Array);
 			next();
 		},
 		dataModel.middleware,

@@ -29,7 +29,9 @@ module.exports = declare([],{
 	                Object.keys(services).forEach(function(method){
 				if (typeof this[method] == 'undefined'){
 					this[method] = function(){
-						return this.model[method].call(this.model,arguments);
+						console.log("Facet Wrapper Arguments for " + method + ":", arguments);
+						console.log("  wrapper args is array: ", arguments instanceof Array);
+						return this.model[method].apply(this.model,arguments);
 					}
 				}
 			},this);
@@ -38,18 +40,18 @@ module.exports = declare([],{
 			
 				if (this[method] === true){
 					this[method] = function(){
+						console.log("Priv Facet call model method with args: ", arguments);
 						return this.model[method].call(this.model, arguments);	
 					}
 				}else if (typeof this[method]=='function'){
 					var params = introspect(this[method])
-					//debug("Params: ", params);
 					if (params[params.length-1]=="/*expose*/") {
 						this._smd.services[method] = {
 							type: "method",
 							parameters: []
 						}
 
-						//debug("Expose Function: ", method);
+						debug("Expose Function: ", method);
 						var svcParams = params.forEach(function(p,idx) { 
 							if (!p.match(/\/\*/)){
 								if (params[idx+1] && params[idx+1].match(/\/\*/) && params[idx+1]!="/*expose*/"){
@@ -62,9 +64,9 @@ module.exports = declare([],{
 							}
 						},this);
 	
-						//debug("svcParams: ", svcParams);
+						debug("svcParams: ", svcParams);
 					}else{
-						//debug("Facet Method Exists for " + method + ", but does not include an /*exposed*/ comment");
+						debug("Facet Method Exists for " + method + ", but does not include an /*exposed*/ comment");
 					}	
 				}else{
 					debug("\tNot Found remove from Facet SMD: " + method);
